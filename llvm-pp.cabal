@@ -1,0 +1,47 @@
+name:                llvm-pp
+version:             0.1.0.0
+license:             MIT
+license-file:        LICENSE
+author:              Stephen Diehl
+maintainer:          stephen.m.diehl@gmail.com
+build-type:          Simple
+category:            Compilers
+extra-source-files:  README.md
+cabal-version:       >=1.10
+homepage:            https://github.com/sdiehl/llvm-pp
+
+Synopsis: Pretty printer for LLVM IR.
+Description:
+  Pretty printer for LLVM IR.
+
+Source-Repository head
+    Type: git
+    Location: git@github.com:sdiehl/llvm-pp.git
+
+library
+  Hs-source-dirs:      src
+  exposed-modules:     
+    LLVM.General.Pretty
+    LLVM.General.Typed
+  default-language:    Haskell2010
+  build-depends:       
+    base                 >= 4.6   && < 4.10,
+    llvm-general-pure    >= 3.5,
+    text                 >= 0.1,
+    wl-pprint-text       >= 1.1
+
+Test-suite test
+  Type:                exitcode-stdio-1.0
+  main-is:             Main.hs
+  default-language:    Haskell2010
+  build-depends: 
+    base                 >= 4.6 && < 4.10,
+    text                 >= 0.1,
+    mtl                  >= 2.2.0,
+    transformers         >= 0.3.0.0 && < 0.6,
+    directory            >= 1.2,
+    filepath             >= 1.3,
+    wl-pprint-text       >= 1.1,
+    llvm-pp              >= 0.1,
+    llvm-general         >= 3.5,
+    llvm-general-pure    >= 3.5
