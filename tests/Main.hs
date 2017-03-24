@@ -35,15 +35,18 @@ readir fname = do
       putStrLn $ ppShow ast
       let str = ppllvm ast
       T.putStrLn str
+      T.writeFile ("tests/output" </> takeFileName fname) str
       trip <- runExceptT $ M.withModuleFromLLVMAssembly ctx (T.unpack str) (const $ return ())
       case trip of
         Left err -> do
-          print err
+          writeFile ("tests/output" </> takeFileName fname) err
           exitFailure
         Right ast -> putStrLn "Round Tripped!"
 
     case res of
-      Left err -> print err
+      Left err -> do
+        writeFile ("tests/output" </> takeFileName fname) err
+        exitFailure
       Right _ -> return ()
 
 main :: IO ()
@@ -53,7 +56,7 @@ main = do
 
   case files of
     [] -> do
-      dircontents <- map (combine "tests/input") <$> getDirectoryContents "tests/input"
+      dircontents <- getDirectoryContents "tests/input"
       dirfiles <- filterM doesFileExist dircontents
       mapM readir dirfiles
     _  -> mapM readir files
