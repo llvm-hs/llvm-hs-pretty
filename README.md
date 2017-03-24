@@ -1,28 +1,25 @@
-llvm-pp
--------
+llvm-hs-pretty
+--------------
 
-[![Build Status](https://travis-ci.org/sdiehl/llvm-pp.svg)](https://travis-ci.org/sdiehl/llvm-pp)
+[![Build Status](https://travis-ci.org/llvm-hs/llvm-hs-pretty.svg)](https://travis-ci.org/llvm-hs/llvm-hs-pretty)
 
-A pretty printer for ``llvm-general-pure``. Goal is to be able to pretty print a
+A pretty printer for ``llvm-hs-pure``. Goal is to be able to pretty print a
 sufficiently large subset of the LLVM AST from pure Haskell without having to go
 through the C++ API.
-
-Pretty much no way this code is going to pretty, it's a giant string munging
-program. Be warned.
 
 Usage
 -----
 
 ```bash
-sudo apt-get install llvm-dev-3.8
+sudo apt-get install llvm-dev-4.0
 ```
 
-There is a single function ``ppllvm`` that maps a LLVM.General.AST.Module to a
+There is a single function ``ppllvm`` that maps a LLVM.AST.Module to a
 String.
 
 ```haskell
-import LLVM.General.AST
-import LLVM.General.Pretty (ppllvm)
+import LLVM.AST
+import LLVM.Pretty (ppllvm)
 
 ppllvm :: Module -> Text
 ```
@@ -78,20 +75,20 @@ entry:
 }
 ```
 
-Using the LLVM.General AST we construct the type and feed it to the pretty
+Using the LLVM.AST we construct the type and feed it to the pretty
 printer.
 
 ```haskell
 module Standalone where
 
 -- Pretty Printer
-import LLVM.General.Pretty (ppllvm)
+import LLVM.Pretty (ppllvm)
 
 -- AST
-import qualified LLVM.General.AST as AST
-import qualified LLVM.General.AST.Linkage as Linkage
-import qualified LLVM.General.AST.Visibility as Visibility
-import qualified LLVM.General.AST.CallingConvention as Convention
+import qualified LLVM.AST as AST
+import qualified LLVM.AST.Linkage as Linkage
+import qualified LLVM.AST.Visibility as Visibility
+import qualified LLVM.AST.CallingConvention as Convention
 
 import Data.Text.Lazy.IO as TIO
 

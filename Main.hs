@@ -1,9 +1,9 @@
 module Main where
 
-import qualified LLVM.General.Module as M
-import LLVM.General.Context
-import LLVM.General.PrettyPrint
-import LLVM.General.Pretty (ppllvm)
+import qualified LLVM.Module as M
+import LLVM.Context
+import LLVM.PrettyPrint
+import LLVM.Pretty (ppllvm)
 
 import Control.Monad (filterM)
 import Control.Monad.Except

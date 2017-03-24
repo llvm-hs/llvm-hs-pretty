@@ -1,12 +1,12 @@
 module Standalone where
 
 -- Pretty Printer
-import LLVM.General.Pretty (ppllvm)
+import LLVM.Pretty (ppllvm)
 
 -- AST
-import LLVM.General.AST
-import qualified LLVM.General.AST as AST
-import LLVM.General.AST.Global
+import LLVM.AST
+import qualified LLVM.AST as AST
+import LLVM.AST.Global
 
 import Data.Text.Lazy.IO as TIO
 

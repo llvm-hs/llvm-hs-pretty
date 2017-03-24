@@ -1,15 +1,15 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module LLVM.General.Typed (
+module LLVM.Typed (
   Typed(..),
 ) where
 
-import LLVM.General.AST
-import LLVM.General.AST.Global
-import LLVM.General.AST.Type
+import LLVM.AST
+import LLVM.AST.Global
+import LLVM.AST.Type
 
-import qualified LLVM.General.AST.Constant as C
-import qualified LLVM.General.AST.Float as F
+import qualified LLVM.AST.Constant as C
+import qualified LLVM.AST.Float as F
 
 -----
 -- Reasoning about types

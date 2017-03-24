@@ -5,29 +5,29 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module LLVM.General.Pretty (
+module LLVM.Pretty (
   ppllvm,
 ) where
 
 import Prelude hiding ((<$>))
 import GHC.Word
 
-import LLVM.General.Typed
+import LLVM.Typed
 
-import LLVM.General.AST
-import LLVM.General.AST.Global
-import LLVM.General.AST.Type
+import LLVM.AST
+import LLVM.AST.Global
+import LLVM.AST.Type
 
-import LLVM.General.AST.Attribute
-import qualified LLVM.General.AST.Linkage as L
-import qualified LLVM.General.AST.Visibility as V
-import qualified LLVM.General.AST.CallingConvention as CC
-import qualified LLVM.General.AST.Constant as C
-import qualified LLVM.General.AST.FloatingPointPredicate as FP
-import qualified LLVM.General.AST.IntegerPredicate as IP
-import qualified LLVM.General.AST.AddrSpace as AS
-import qualified LLVM.General.AST.Float as F
-import LLVM.General.AST.FunctionAttribute
+import LLVM.AST.Attribute
+import qualified LLVM.AST.Linkage as L
+import qualified LLVM.AST.Visibility as V
+import qualified LLVM.AST.CallingConvention as CC
+import qualified LLVM.AST.Constant as C
+import qualified LLVM.AST.FloatingPointPredicate as FP
+import qualified LLVM.AST.IntegerPredicate as IP
+import qualified LLVM.AST.AddrSpace as AS
+import qualified LLVM.AST.Float as F
+import LLVM.AST.FunctionAttribute
 
 import Data.String
 

@@ -1,15 +1,5 @@
 resolver: lts-7.8
 packages:
 - '.'
-- location:
-    git:    https://github.com/bscarlet/llvm-general.git
-    commit: 529f9bf117b5ffd1ccf7ebeb679a97b3b1c67938 # 3.8
-    # commit: ec1ad5bd2112e7f64dbb43441b5e2075cf6ad8e7 # 3.9
-  extra-dep: true
-  subdirs:
-    - 'llvm-general'
-    - 'llvm-general-pure'
-
-flags:
-  llvm-general:
-    shared-llvm: true
+extra-deps:
+- llvm-hs-pure-4.0.0.0

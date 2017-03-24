@@ -1,5 +1,7 @@
 module LLVM (
-  module LLVM.General,
+  module LLVM.Typed
+  module LLVM.Pretty
 ) where
 
-import LLVM.General
+import LLVM.Typed
+import LLVM.Pretty
