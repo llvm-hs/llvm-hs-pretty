@@ -8,7 +8,7 @@ build-type:          Simple
 category:            Compilers
 extra-source-files:  README.md
 cabal-version:       >=1.10
-homepage:            https://github.com/sdiehl/llvm-pp
+homepage:            https://github.com/llvm-hs/llvm-hs-pretty
 
 Synopsis: Pretty printer for LLVM IR.
 Description:
@@ -16,10 +16,10 @@ Description:
 
 Source-Repository head
     Type: git
-    Location: git@github.com:sdiehl/llvm-pp.git
+    Location: git@github.com:llvm-hs/llvm-hs-pretty.git
 
 library
-  Hs-source-dirs:      src
+  hs-source-dirs:      src
   exposed-modules:     
     LLVM.Pretty
     LLVM.Typed
@@ -31,16 +31,18 @@ library
     wl-pprint-text       >= 1.1
 
 Test-suite test
-  Type:                exitcode-stdio-1.0
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      tests
   main-is:             Main.hs
   default-language:    Haskell2010
   build-depends: 
     base                 >= 4.6 && < 5.0,
     text                 >= 0.1,
-    mtl                  >= 2.2.0,
-    transformers         >= 0.3.0.0 && < 0.6,
+    mtl                  >= 2.2,
+    transformers         >= 0.3 && < 0.6,
     directory            >= 1.2,
     filepath             >= 1.3,
+    pretty-show          >= 1.6 && < 1.7,
     wl-pprint-text       >= 1.1,
     llvm-hs-pretty       >= 0.1,
     llvm-hs              >= 4.0,

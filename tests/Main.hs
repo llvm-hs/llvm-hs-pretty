@@ -2,7 +2,6 @@ module Main where
 
 import qualified LLVM.Module as M
 import LLVM.Context
-import LLVM.PrettyPrint
 import LLVM.Pretty (ppllvm)
 
 import Control.Monad (filterM)
@@ -11,6 +10,7 @@ import Control.Monad.Except
 import Data.Functor
 import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as T
+import Text.Show.Pretty (ppShow)
 
 import System.IO
 import System.Exit
@@ -32,7 +32,7 @@ readir fname = do
   withContext $ \ctx -> do
     res <- runExceptT $ M.withModuleFromLLVMAssembly ctx str $ \mod -> do
       ast <- M.moduleAST mod
-      putStrLn $ showPretty ast
+      putStrLn $ ppShow ast
       let str = ppllvm ast
       T.putStrLn str
       trip <- runExceptT $ M.withModuleFromLLVMAssembly ctx (T.unpack str) (const $ return ())
@@ -53,7 +53,7 @@ main = do
 
   case files of
     [] -> do
-      dircontents <- map (combine "tests") <$> getDirectoryContents "tests"
+      dircontents <- map (combine "tests/input") <$> getDirectoryContents "tests/input"
       dirfiles <- filterM doesFileExist dircontents
       mapM readir dirfiles
     _  -> mapM readir files

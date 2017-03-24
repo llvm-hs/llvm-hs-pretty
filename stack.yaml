@@ -3,3 +3,8 @@ packages:
 - '.'
 extra-deps:
 - llvm-hs-pure-4.0.0.0
+- llvm-hs-4.0.0.0
+
+flags:
+  llvm-hs:
+    shared-llvm: true
