@@ -37,6 +37,7 @@ import Text.PrettyPrint.Leijen.Text
 
 import Data.Char (chr, ord, isControl, isLetter, isDigit)
 import Data.List (intersperse)
+import Data.Maybe (isJust)
 import Numeric (showHex)
 
 -------------------------------------------------------------------------------
@@ -59,6 +60,9 @@ hlinecat = vcat . intersperse softbreak
 wrapbraces :: Doc -> Doc -> Doc
 wrapbraces leadIn x = (leadIn <> char '{') <$> x <$> char '}'
 
+spacedbraces :: Doc -> Doc
+spacedbraces x = char '{' <+> x <+> char '}'
+
 local :: Doc -> Doc
 local a = "%" <> a
 
@@ -70,6 +74,9 @@ label a = "label" <+> "%" <> a
 
 isFunctionPtr (PointerType FunctionType {..} _) = True
 isFunctionPtr _ = False
+
+cma :: Doc -> Doc -> Doc -- <,> does not work :(
+a `cma` b = a <> "," <+> b
 
 -------------------------------------------------------------------------------
 -- Classes
@@ -119,7 +126,6 @@ instance PP Type where
   pp (FloatingPointType width PairOfFloats)   = "ppc_fp" <> pp width
 
   pp VoidType = "void"
-  pp (PointerType ref@(FunctionType {}) addr) = pp ref
   pp (PointerType ref addr) = pp ref <> "*"
   pp ft@(FunctionType {..}) = pp resultType <+> ppFunctionArgumentTypes ft
   pp (VectorType {..}) = "<" <> pp nVectorElements <+> "x" <+> pp elementType <> ">"
@@ -144,12 +150,19 @@ instance PP Global where
           ("define" <+> pp returnType <+> global (pp name) <> ppParams pp parameters)
            `wrapbraces` (vcat $ fmap pp bs)
 
-  pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> "global" <+> pp type' <+> ppMaybe initializer
+  pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> kind <+> pp type' <+> ppMaybe initializer
+    where
+      hasInitializer = isJust initializer
+      kind | isConstant = "constant"
+           | otherwise  = "global"
 
+  pp (GlobalAlias {..}) = global (pp name) <+> "=" <+> pp linkage <+> "alias" <+> pp typ `cma` ppTyped aliasee
+    where
+      PointerType typ _ = type'
 
 instance PP Definition where
   pp (GlobalDefinition x) = pp x
-  pp (TypeDefinition nm ty) = pp nm
+  pp (TypeDefinition nm ty) = local (pp nm) <+> "=" <+> "type" <+> maybe "opaque" pp ty
   pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap pp attrs))
   pp (NamedMetadataDefinition nm meta) = text (pack nm)
   pp (MetadataNodeDefinition node meta) = pp node
@@ -186,6 +199,15 @@ instance PP FunctionAttribute where
    SanitizeMemory      -> "TODO"
    StringAttribute k v -> dquotes (text (pack k)) <> "=" <> dquotes (text (pack v))
 
+instance PP L.Linkage where
+    pp = ppLinkage False
+
+ppLinkage omitExternal x = case x of
+   L.External | omitExternal -> empty
+              | otherwise    -> "external"
+   L.Private                 -> "private"
+   L.Internal                -> "internal"
+
 instance PP MetadataNodeID where
   pp (MetadataNodeID x) = "#" <> int (fromIntegral x)
 
@@ -201,33 +223,43 @@ instance PP Terminator where
   pp (Ret val meta) = "ret" <+> maybe "void" ppTyped val
   pp (CondBr cond tdest fdest meta) =
       "br" <+> ppTyped cond
-    <> "," <+> label (pp tdest)
-    <> "," <+> label (pp fdest)
+    `cma` label (pp tdest)
+    `cma` label (pp fdest)
+  pp (Switch {..}) = "switch" <+> ppTyped operand0'
+                   `cma` label (pp defaultDest)
+                   <+> brackets (hsep [ ppTyped v `cma` label (pp l) | (v,l) <- dests ])
+
+  pp x = error (show x)
 
 instance PP Instruction where
   pp x = case x of
-    Mul {..}    -> "mul" <+> ppTyped operand0 <> "," <+> pp operand1
-    Add {..}    -> "add" <+> ppTyped operand0 <> "," <+> pp operand1
-    Sub {..}    -> "sub" <+> ppTyped operand0 <> "," <+> pp operand1
-    FSub {..}   -> "fsub" <+> ppTyped operand0 <> "," <+> pp operand1
-    FMul {..}   -> "fmul" <+> ppTyped operand0 <> "," <+> pp operand1
+    Mul {..}    -> "mul" <+> ppTyped operand0 `cma` pp operand1
+    Add {..}    -> "add" <+> ppTyped operand0 `cma` pp operand1
+    Sub {..}    -> "sub" <+> ppTyped operand0 `cma` pp operand1
+    FSub {..}   -> "fsub" <+> ppTyped operand0 `cma` pp operand1
+    FMul {..}   -> "fmul" <+> ppTyped operand0 `cma` pp operand1
 
-    FAdd {..}   -> "fadd" <+> ppTyped operand0 <> "," <+> pp operand1
-    FCmp {..}   -> "fcmp" <+> pp fpPredicate <+> ppTyped operand0 <> "," <+> pp operand1
+    FAdd {..}   -> "fadd" <+> ppTyped operand0 `cma` pp operand1
+    FCmp {..}   -> "fcmp" <+> pp fpPredicate <+> ppTyped operand0 `cma` pp operand1
 
     Alloca {..} -> "alloca" <+> pp allocatedType
-    Store {..}  -> "store" <+> ppTyped value <> "," <+> ppTyped address
-    Load {..}   -> "load" <+> ppTyped address
+    Store {..}  -> "store" <+> ppTyped value `cma` ppTyped address
+    Load {..}   -> "load" <+> pp argTy `cma` ppTyped address
+      where PointerType argTy _ = typeOf address
     Phi {..}    -> "phi" <+> pp type' <+> commas (fmap phiIncoming incomingValues)
 
-    ICmp {..}   -> "icmp" <+> pp iPredicate <+> ppTyped operand0 <> "," <+> pp operand1
+    ICmp {..}   -> "icmp" <+> pp iPredicate <+> ppTyped operand0 `cma` pp operand1
 
     Call {..}   -> ppCall x
     Select {..} -> "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
     SExt {..}   -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
     Trunc {..}  -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
 
-    GetElementPtr {..} -> "getelementptr" <+> bounds inBounds <+> commas (fmap ppTyped (address:indices))
+    GetElementPtr {..} -> "getelementptr" <+> bounds inBounds <+> commas (pp argTy : fmap ppTyped (address:indices))
+      where PointerType argTy _ = typeOf address
+
+    BitCast {..} -> "bitcast" <+> ppTyped operand0 <+> "to" <+> pp type'
+    PtrToInt {..} -> "ptrtoint" <+> ppTyped operand0 <+> "to" <+> pp type'
 
     x -> error (show x)
 
@@ -250,15 +282,22 @@ instance PP C.Constant where
   pp (C.Float (F.Single val)) = text $ pack $ printf "%6.6e" val
   pp (C.GlobalReference ty nm) = "@" <> pp nm
 
+  pp (C.Struct _ _ elems) = spacedbraces $ commas $ fmap ppTyped elems
+  pp (C.Null {}) = "null"
+  pp C.BitCast {..}
+    = "bitcast" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
+
   pp C.Array {..}
     | memberType == (IntegerType 8) = "c" <> (dquotes $ hcat [ppIntAsChar val | C.Int _ val <- memberValues])
     | otherwise = brackets $ commas $ fmap ppTyped memberValues
 
-
-  pp C.GetElementPtr {..} = "getelementptr" <+> bounds inBounds <+> parens (commas (fmap ppTyped (address:indices)))
+  pp C.GetElementPtr {..} = "getelementptr" <+> bounds inBounds <+> parens (commas (pp argTy : fmap ppTyped (address:indices)))
     where
+      PointerType argTy _ = typeOf address
       bounds True = "inbounds"
       bounds False = empty
+
+  pp x = error (show x)
 
 instance PP a => PP (Named a) where
   pp (nm := a) = "%" <> pp nm <+> "=" <+> pp a
@@ -327,8 +366,11 @@ ppIntAsChar = escape . chr . fromIntegral
 ppTyped :: (PP a, Typed a) => a -> Doc
 ppTyped a = pp (typeOf a) <+> pp a
 
+ppCommaTyped :: (PP a, Typed a) => a -> Doc
+ppCommaTyped a = pp (typeOf a) `cma` pp a
+
 phiIncoming :: (Operand, Name) -> Doc
-phiIncoming (op, nm) = brackets (pp op <> "," <+> (local (pp nm)))
+phiIncoming (op, nm) = brackets (pp op `cma` (local (pp nm)))
 
 ppParams :: (a -> Doc) -> ([a], Bool) -> Doc
 ppParams ppParam (ps, varrg) = parens . commas $ fmap ppParam ps ++ vargs
