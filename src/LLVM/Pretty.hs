@@ -253,14 +253,14 @@ instance PP Instruction where
     Call {..}   -> ppCall x
     Select {..} -> "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
     SExt {..}   -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
-    Trunc {..}  -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
+    ZExt {..}   -> "zext" <+> ppTyped operand0 <+> "to" <+> pp type'
+    Trunc {..}  -> "trunc" <+> ppTyped operand0 <+> "to" <+> pp type'
 
     GetElementPtr {..} -> "getelementptr" <+> bounds inBounds <+> commas (pp argTy : fmap ppTyped (address:indices))
       where PointerType argTy _ = typeOf address
 
     BitCast {..} -> "bitcast" <+> ppTyped operand0 <+> "to" <+> pp type'
     PtrToInt {..} -> "ptrtoint" <+> ppTyped operand0 <+> "to" <+> pp type'
-    ZExt {..} -> "zext" <+> ppTyped operand0 <+> "to" <+> pp type'
 
     x -> error (show x)
 
