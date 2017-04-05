@@ -242,7 +242,11 @@ instance PP Instruction where
     FAdd {..}   -> "fadd" <+> ppTyped operand0 `cma` pp operand1
     FCmp {..}   -> "fcmp" <+> pp fpPredicate <+> ppTyped operand0 `cma` pp operand1
 
-    Alloca {..} -> "alloca" <+> pp allocatedType
+    Alloca {..} -> "alloca" <+> pp allocatedType <> num <> align
+      where num   = case numElements of Nothing -> empty
+                                        Just o -> "," <+> ppTyped o
+            align | alignment == 0 = empty
+                  | otherwise      = "," <+> pp alignment
     Store {..}  -> "store" <+> ppTyped value `cma` ppTyped address
     Load {..}   -> "load" <+> pp argTy `cma` ppTyped address
       where PointerType argTy _ = typeOf address
