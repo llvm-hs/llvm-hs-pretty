@@ -346,7 +346,7 @@ instance PP IP.IntegerPredicate where
 -------------------------------------------------------------------------------
 
 escape :: Char -> Doc
-escape '"'  = "\\\""
+escape '"'  = "\\22"
 escape '\\' = "\\\\"
 escape c    = if isControl c
               then "\\" <> hex c
