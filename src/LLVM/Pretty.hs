@@ -260,6 +260,7 @@ instance PP Instruction where
 
     BitCast {..} -> "bitcast" <+> ppTyped operand0 <+> "to" <+> pp type'
     PtrToInt {..} -> "ptrtoint" <+> ppTyped operand0 <+> "to" <+> pp type'
+    ZExt {..} -> "zext" <+> ppTyped operand0 <+> "to" <+> pp type'
 
     x -> error (show x)
 
