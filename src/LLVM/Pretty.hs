@@ -233,13 +233,16 @@ instance PP Terminator where
 
 instance PP Instruction where
   pp x = case x of
-    Mul {..}    -> "mul" <+> ppTyped operand0 `cma` pp operand1
-    Add {..}    -> "add" <+> ppTyped operand0 `cma` pp operand1
-    Sub {..}    -> "sub" <+> ppTyped operand0 `cma` pp operand1
+    Add {..}    -> "add"  <+> ppTyped operand0 `cma` pp operand1
+    Sub {..}    -> "sub"  <+> ppTyped operand0 `cma` pp operand1
+    Mul {..}    -> "mul"  <+> ppTyped operand0 `cma` pp operand1
+    Shl {..}    -> "shl"  <+> ppTyped operand0 `cma` pp operand1
+    AShr {..}   -> "ashr" <+> ppTyped operand0 `cma` pp operand1
+
+    FAdd {..}   -> "fadd" <+> ppTyped operand0 `cma` pp operand1
     FSub {..}   -> "fsub" <+> ppTyped operand0 `cma` pp operand1
     FMul {..}   -> "fmul" <+> ppTyped operand0 `cma` pp operand1
 
-    FAdd {..}   -> "fadd" <+> ppTyped operand0 `cma` pp operand1
     FCmp {..}   -> "fcmp" <+> pp fpPredicate <+> ppTyped operand0 `cma` pp operand1
 
     Alloca {..} -> "alloca" <+> pp allocatedType <> num <> align
