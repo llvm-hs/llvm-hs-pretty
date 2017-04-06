@@ -139,7 +139,7 @@ instance PP Global where
   pp (Function {..}) =
       case basicBlocks of
         [] ->
-          ("declare" <+> pp returnType <+> global (pp name) <> ppParams (pp . typeOf) parameters)
+          ("declare" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams (pp . typeOf) parameters)
 
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
@@ -207,6 +207,7 @@ ppLinkage omitExternal x = case x of
               | otherwise    -> "external"
    L.Private                 -> "private"
    L.Internal                -> "internal"
+   L.ExternWeak              -> "extern_weak"
 
 instance PP MetadataNodeID where
   pp (MetadataNodeID x) = "#" <> int (fromIntegral x)
