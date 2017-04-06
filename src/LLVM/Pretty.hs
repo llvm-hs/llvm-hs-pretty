@@ -242,7 +242,11 @@ instance PP Instruction where
     FAdd {..}   -> "fadd" <+> ppTyped operand0 `cma` pp operand1
     FCmp {..}   -> "fcmp" <+> pp fpPredicate <+> ppTyped operand0 `cma` pp operand1
 
-    Alloca {..} -> "alloca" <+> pp allocatedType
+    Alloca {..} -> "alloca" <+> pp allocatedType <> num <> align
+      where num   = case numElements of Nothing -> empty
+                                        Just o -> "," <+> ppTyped o
+            align | alignment == 0 = empty
+                  | otherwise      = "," <+> pp alignment
     Store {..}  -> "store" <+> ppTyped value `cma` ppTyped address
     Load {..}   -> "load" <+> pp argTy `cma` ppTyped address
       where PointerType argTy _ = typeOf address
@@ -253,7 +257,8 @@ instance PP Instruction where
     Call {..}   -> ppCall x
     Select {..} -> "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
     SExt {..}   -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
-    Trunc {..}  -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
+    ZExt {..}   -> "zext" <+> ppTyped operand0 <+> "to" <+> pp type'
+    Trunc {..}  -> "trunc" <+> ppTyped operand0 <+> "to" <+> pp type'
 
     GetElementPtr {..} -> "getelementptr" <+> bounds inBounds <+> commas (pp argTy : fmap ppTyped (address:indices))
       where PointerType argTy _ = typeOf address
@@ -345,7 +350,7 @@ instance PP IP.IntegerPredicate where
 -------------------------------------------------------------------------------
 
 escape :: Char -> Doc
-escape '"'  = "\\\""
+escape '"'  = "\\22"
 escape '\\' = "\\\\"
 escape c    = if isControl c
               then "\\" <> hex c
