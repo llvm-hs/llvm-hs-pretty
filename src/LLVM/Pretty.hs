@@ -35,7 +35,7 @@ import Text.Printf
 import Data.Text.Lazy (Text, pack, unpack)
 import Text.PrettyPrint.Leijen.Text
 
-import Data.Char (chr, ord, isControl, isLetter, isDigit)
+import Data.Char (chr, ord, isAscii, isControl, isLetter, isDigit)
 import Data.List (intersperse)
 import Data.Maybe (isJust)
 import Numeric (showHex)
@@ -239,6 +239,7 @@ instance PP Instruction where
     Mul {..}    -> "mul"  <+> ppTyped operand0 `cma` pp operand1
     Shl {..}    -> "shl"  <+> ppTyped operand0 `cma` pp operand1
     AShr {..}   -> "ashr" <+> ppTyped operand0 `cma` pp operand1
+    And {..}    -> "and"  <+> ppTyped operand0 `cma` pp operand1
 
     FAdd {..}   -> "fadd" <+> ppTyped operand0 `cma` pp operand1
     FSub {..}   -> "fsub" <+> ppTyped operand0 `cma` pp operand1
@@ -356,9 +357,9 @@ instance PP IP.IntegerPredicate where
 escape :: Char -> Doc
 escape '"'  = "\\22"
 escape '\\' = "\\\\"
-escape c    = if isControl c
-              then "\\" <> hex c
-              else char c
+escape c    = if isAscii c && not (isControl c)
+              then char c
+              else "\\" <> hex c
     where
         hex :: Char -> Doc
         hex = pad0 . ($ []) . showHex . ord
