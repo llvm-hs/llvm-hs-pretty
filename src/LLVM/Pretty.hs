@@ -240,6 +240,10 @@ instance PP Instruction where
     Shl {..}    -> "shl"  <+> ppTyped operand0 `cma` pp operand1
     AShr {..}   -> "ashr" <+> ppTyped operand0 `cma` pp operand1
     And {..}    -> "and"  <+> ppTyped operand0 `cma` pp operand1
+    SDiv {..}   -> "sdiv"  <+> ppTyped operand0 `cma` pp operand1
+    UDiv {..}   -> "udiv"  <+> ppTyped operand0 `cma` pp operand1
+    SRem {..}   -> "srem"  <+> ppTyped operand0 `cma` pp operand1
+    URem {..}   -> "urem"  <+> ppTyped operand0 `cma` pp operand1
 
     FAdd {..}   -> "fadd" <+> ppTyped operand0 `cma` pp operand1
     FSub {..}   -> "fsub" <+> ppTyped operand0 `cma` pp operand1
