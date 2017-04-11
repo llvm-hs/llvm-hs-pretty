@@ -143,11 +143,11 @@ instance PP Global where
 
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
-            ("define" <+> pp returnType <+> global (pp name) <> ppParams pp parameters)
+            ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters)
             `wrapbraces` (indent 2 $ ppSingleBlock b)
 
         bs ->
-          ("define" <+> pp returnType <+> global (pp name) <> ppParams pp parameters)
+          ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters)
            `wrapbraces` (vcat $ fmap pp bs)
 
   pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> kind <+> pp type' <+> ppMaybe initializer
