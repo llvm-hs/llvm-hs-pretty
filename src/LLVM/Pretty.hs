@@ -278,6 +278,7 @@ instance PP Instruction where
 
     BitCast {..} -> "bitcast" <+> ppTyped operand0 <+> "to" <+> pp type'
     PtrToInt {..} -> "ptrtoint" <+> ppTyped operand0 <+> "to" <+> pp type'
+    IntToPtr {..} -> "inttoptr" <+> ppTyped operand0 <+> "to" <+> pp type'
 
     x -> error (show x)
 
@@ -314,6 +315,10 @@ instance PP C.Constant where
       PointerType argTy _ = typeOf address
       bounds True = "inbounds"
       bounds False = empty
+
+  pp C.BitCast {..} = "bitcast" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
+  pp C.PtrToInt {..} = "ptrtoint" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
+  pp C.IntToPtr {..} = "inttoptr" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
 
   pp x = error (show x)
 
