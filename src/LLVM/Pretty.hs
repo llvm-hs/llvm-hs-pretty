@@ -398,7 +398,6 @@ ppCall :: Instruction -> Doc
 ppCall Call { function = Right f,..}
   = tail <+> "call" <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
     where
-      tail = if isTailCall tailCallKind then "tail" else empty
       (functionType@FunctionType {..}) = referencedType (typeOf f)
       ftype = if isVarArg || isFunctionPtr resultType
               then ppFunctionArgumentTypes functionType <> "*"
@@ -406,9 +405,10 @@ ppCall Call { function = Right f,..}
       referencedType (PointerType t _) = referencedType t
       referencedType t                 = t
 
-      -- xxx: tail call kind hack
-      isTailCall Nothing = False
-      isTailCall (Just a) = True
+      tail = case tailCallKind of
+        Just Tail -> "tail"
+        Just MustTail -> "musttail"
+        Nothing -> empty
 
 ppCall x = error (show x)
 
