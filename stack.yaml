@@ -1,10 +1,7 @@
-resolver: lts-7.8
+resolver: nightly-2017-04-09
 packages:
 - '.'
-extra-deps:
-- llvm-hs-pure-4.0.0.0
-- llvm-hs-4.0.0.0
-
-flags:
-  llvm-hs:
-    shared-llvm: true
+- location: ../llvm/llvm-hs-pure
+  extra-dep: True
+- location: ../llvm/llvm-hs
+  extra-dep: True

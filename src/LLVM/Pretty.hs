@@ -30,6 +30,7 @@ import qualified LLVM.AST.Float as F
 import LLVM.AST.FunctionAttribute
 
 import Data.String
+import qualified Data.ByteString.Short as SB
 
 import Text.Printf
 import Data.Text.Lazy (Text, pack, unpack)
@@ -78,6 +79,9 @@ isFunctionPtr _ = False
 cma :: Doc -> Doc -> Doc -- <,> does not work :(
 a `cma` b = a <> "," <+> b
 
+sb2text :: SB.ShortByteString -> Text
+sb2text = pack . map (chr . fromIntegral) . SB.unpack
+
 -------------------------------------------------------------------------------
 -- Classes
 -------------------------------------------------------------------------------
@@ -98,13 +102,13 @@ instance PP Integer where
   pp = integer
 
 instance PP Name where
-  pp (Name []) = dquotes empty
-  pp (Name name@(first:_))
-    | isFirst first && all isRest name = text (pack name)
-    | otherwise = dquotes . hcat . map escape $ name
-    where
-        isFirst c = isLetter c || c == '-' || c == '_'
-        isRest c = isDigit c || isFirst c
+  pp (Name n) = go $ unpack $ sb2text n
+    where go [] = dquotes empty
+          go name@(first:_)
+            | isFirst first && all isRest name = text (pack name)
+            | otherwise = dquotes . hcat . map escape $ name
+          isFirst c = isLetter c || c == '-' || c == '_'
+          isRest c = isDigit c || isFirst c
   pp (UnName x) = int (fromIntegral x)
 
 instance PP Parameter where
@@ -164,7 +168,7 @@ instance PP Definition where
   pp (GlobalDefinition x) = pp x
   pp (TypeDefinition nm ty) = local (pp nm) <+> "=" <+> "type" <+> maybe "opaque" pp ty
   pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap pp attrs))
-  pp (NamedMetadataDefinition nm meta) = text (pack nm)
+  pp (NamedMetadataDefinition nm meta) = text (sb2text nm)
   pp (MetadataNodeDefinition node meta) = pp node
 
 instance PP FunctionAttribute where
@@ -197,7 +201,7 @@ instance PP FunctionAttribute where
    SanitizeAddress     -> "TODO"
    SanitizeThread      -> "TODO"
    SanitizeMemory      -> "TODO"
-   StringAttribute k v -> dquotes (text (pack k)) <> "=" <> dquotes (text (pack v))
+   StringAttribute k v -> dquotes (text (sb2text k)) <> "=" <> dquotes (text (sb2text v))
 
 instance PP L.Linkage where
     pp = ppLinkage False
@@ -323,8 +327,8 @@ instance PP a => PP (Named a) where
 
 instance PP Module where
   pp Module {..} =
-    let header = printf "; ModuleID = '%s'" moduleName in
-    hlinecat (fromString header : (fmap pp moduleDefinitions))
+    let header = "; ModuleID = '" <> sb2text moduleName <> "'"
+    in hlinecat (pretty header : (fmap pp moduleDefinitions))
 
 instance PP FP.FloatingPointPredicate where
   pp op = case op of
