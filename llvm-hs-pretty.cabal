@@ -23,6 +23,7 @@ library
   exposed-modules:     
     LLVM.Pretty
     LLVM.Typed
+    LLVM.Token
   default-language:    Haskell2010
   build-depends:       
     base                 >= 4.6   && < 5.0,
