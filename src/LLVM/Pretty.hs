@@ -1,9 +1,11 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
 module LLVM.Pretty (
   ppllvm,
@@ -112,6 +114,7 @@ instance PP Parameter where
 
 instance PP ([Parameter], Bool) where
   pp (params, False) = commas (fmap pp params)
+  pp (params, True) = "TODO"
 
 instance PP (Operand, [ParameterAttribute]) where
   pp (op, attrs) = ppTyped op
@@ -134,6 +137,8 @@ instance PP Type where
                                else  "{" <> (commas $ fmap pp elementTypes ) <> "}"
   pp (ArrayType {..}) = brackets $ pp nArrayElements <+> "x" <+> pp elementType
   pp (NamedTypeReference name) = "%" <> pp name
+  pp (MetadataType) = "metadata"
+  pp (TokenType) = "TODO"
 
 instance PP Global where
   pp (Function {..}) =
@@ -166,9 +171,11 @@ instance PP Definition where
   pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap pp attrs))
   pp (NamedMetadataDefinition nm meta) = text (pack nm)
   pp (MetadataNodeDefinition node meta) = pp node
+  pp (ModuleInlineAssembly _) = "TODO"
+  pp (COMDAT _ _)             = "TODO"
 
 instance PP FunctionAttribute where
-  pp x = case x of
+  pp = \case
    NoReturn            -> "noreturn"
    NoUnwind            -> "nounwind"
    ReadNone            -> "readnone"
@@ -197,6 +204,14 @@ instance PP FunctionAttribute where
    SanitizeAddress     -> "TODO"
    SanitizeThread      -> "TODO"
    SanitizeMemory      -> "TODO"
+   NoRecurse           -> "TODO"
+   AllocSize _ _       -> "TODO"
+   WriteOnly           -> "TODO"
+   ArgMemOnly          -> "TODO"
+   Convergent          -> "TODO"
+   InaccessibleMemOnly -> "TODO"        
+   SafeStack           -> "TODO"
+   InaccessibleMemOrArgMemOnly  -> "TODO"
    StringAttribute k v -> dquotes (text (pack k)) <> "=" <> dquotes (text (pack v))
 
 instance PP L.Linkage where
@@ -208,6 +223,13 @@ ppLinkage omitExternal x = case x of
    L.Private                 -> "private"
    L.Internal                -> "internal"
    L.ExternWeak              -> "extern_weak"
+   L.AvailableExternally     -> "TODO"
+   L.LinkOnce                -> "TODO"
+   L.Weak                    -> "TODO"
+   L.Common                  -> "TODO"
+   L.Appending               -> "TODO"
+   L.LinkOnceODR             -> "TODO"
+   L.WeakODR                 -> "TODO"
 
 instance PP MetadataNodeID where
   pp (MetadataNodeID x) = "#" <> int (fromIntegral x)
@@ -289,6 +311,7 @@ instance PP CallableOperand where
 instance PP Operand where
   pp (LocalReference _ nm) = local (pp nm)
   pp (ConstantOperand con) = pp con
+  pp (MetadataOperand con) = "TODO"
 
 
 instance PP C.Constant where
@@ -396,6 +419,7 @@ ppParams ppParam (ps, varrg) = parens . commas $ fmap ppParam ps ++ vargs
 
 ppFunctionArgumentTypes :: Type -> Doc
 ppFunctionArgumentTypes FunctionType {..} = ppParams pp (argumentTypes, isVarArg)
+ppFunctionArgumentTypes _ = error "Non-function argument"
 
 ppCall :: Instruction -> Doc
 ppCall Call { function = Right f,..}
