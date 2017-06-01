@@ -11,7 +11,6 @@ import LLVM.AST.Type
 
 import qualified LLVM.AST.Constant as C
 import qualified LLVM.AST.Float as F
-
 -----
 -- Reasoning about types
 -----
@@ -88,7 +87,7 @@ getElementPtrType ty cons = ptr i8 -- XXX
 
 getElementType :: Type -> Type
 getElementType (PointerType t _) = t
-getElementType t = t
+getElementType t = error $ "this should be a pointer type" ++ show t
 
 extractValueType = error "extract"
 

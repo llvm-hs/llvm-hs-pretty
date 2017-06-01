@@ -8,8 +8,8 @@ import Control.Monad (filterM)
 import Control.Monad.Except
 
 import Data.Functor
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
+import qualified Data.Text.Lazy as T
+import qualified Data.Text.Lazy.IO as T
 import Text.Show.Pretty (ppShow)
 
 import System.IO
@@ -36,7 +36,7 @@ readir fname = do
       let str = ppllvm ast
       T.putStrLn str
       T.writeFile ("tests/output" </> takeFileName fname) str
-      M.withModuleFromLLVMAssembly ctx (T.unpack str) (const $ return ())     
+      M.withModuleFromLLVMAssembly ctx (T.unpack str) (const $ return ())
 
 main :: IO ()
 main = do

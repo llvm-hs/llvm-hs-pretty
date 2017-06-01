@@ -29,20 +29,20 @@ import LLVM.AST.FunctionAttribute
 
 import Data.String
 import qualified Data.ByteString.Short as SBF
-import qualified Data.ByteString.Char8 as BF
+import qualified Data.ByteString.Lazy.Char8 as BF
+import Data.ByteString.Lazy(fromStrict)
 import Data.ByteString.Internal(w2c)
 
 import Data.Text.Format
 import Text.Printf
-import Data.Text (Text, pack, unpack)
-import Data.Text.Encoding
+import Data.Text.Lazy (Text, pack, unpack)
+import Data.Text.Lazy.Encoding
 import Text.PrettyPrint.Leijen.Text
 
 import Data.Char (chr, ord, isAscii, isControl, isLetter, isDigit)
 import Data.List (intersperse)
 import Data.Maybe (isJust)
 import Numeric (showHex)
-import Debug.Trace
 
 -------------------------------------------------------------------------------
 -- Utils
@@ -103,11 +103,12 @@ instance PP Integer where
 
 instance PP Name where
   pp (Name name)| SBF.null name = dquotes empty
-                | isFirst (w2c $ SBF.index name 0) && BF.all isRest (SBF.fromShort name) = (textStrict . decodeShortUtf8) name
-                | otherwise = dquotes . hcat . BF.foldl (\acc c -> acc ++ [escape c]) [] $ (SBF.fromShort name)
+                | isFirst (w2c $ SBF.index name 0) && BF.all isRest byteStringName = (text . decodeShortUtf8) name
+                | otherwise = dquotes . hcat . BF.foldl (\acc c -> acc ++ [escape c]) [] $ byteStringName
     where
         isFirst c = isLetter c || c == '-' || c == '_'
         isRest c = isDigit c || isFirst c
+        byteStringName = fromStrict $ SBF.fromShort name
   pp (UnName x) = int (fromIntegral x)
 
 instance PP Parameter where
@@ -163,13 +164,14 @@ instance PP Global where
     where
       typ = getElementType type'
 
-decodeShortUtf8 = decodeUtf8 . SBF.fromShort
+decodeShortUtf8 :: SBF.ShortByteString -> Text
+decodeShortUtf8 = decodeUtf8 . fromStrict . SBF.fromShort
 
 instance PP Definition where
   pp (GlobalDefinition x) = pp x
   pp (TypeDefinition nm ty) = local (pp nm) <+> "=" <+> "type" <+> maybe "opaque" pp ty
   pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap pp attrs))
-  pp (NamedMetadataDefinition nm meta) = textStrict (decodeShortUtf8 nm)
+  pp (NamedMetadataDefinition nm meta) = text (decodeShortUtf8 nm)
   pp (MetadataNodeDefinition node meta) = pp node
 
 instance PP FunctionAttribute where
@@ -202,7 +204,7 @@ instance PP FunctionAttribute where
    SanitizeAddress     -> "TODO"
    SanitizeThread      -> "TODO"
    SanitizeMemory      -> "TODO"
-   StringAttribute k v -> dquotes (textStrict (decodeShortUtf8 k)) <> "=" <> dquotes (textStrict (decodeShortUtf8 v))
+   StringAttribute k v -> dquotes (text (decodeShortUtf8 k)) <> "=" <> dquotes (text (decodeShortUtf8 v))
 
 instance PP L.Linkage where
     pp = ppLinkage False
@@ -299,8 +301,8 @@ instance PP Operand where
 
 instance PP C.Constant where
   pp (C.Int width val) = pp val
-  pp (C.Float (F.Double val)) = textStrict $ pack $ printf "%6.6e" val
-  pp (C.Float (F.Single val)) = textStrict $ pack $ printf "%6.6e" val
+  pp (C.Float (F.Double val)) = text $ pack $ printf "%6.6e" val
+  pp (C.Float (F.Single val)) = text $ pack $ printf "%6.6e" val
   pp (C.GlobalReference ty nm) = "@" <> pp nm
 
   pp (C.Struct _ _ elems) = spacedbraces $ commas $ fmap ppTyped elems
@@ -379,7 +381,7 @@ escape c    = if isAscii c && not (isControl c)
         pad0 :: String -> Doc
         pad0 [] = "00"
         pad0 [x] = "0" <> char x
-        pad0 xs = textStrict (pack xs)
+        pad0 xs = text (pack xs)
 
 ppIntAsChar :: Integral a => a -> Doc
 ppIntAsChar = escape . chr . fromIntegral
@@ -404,7 +406,7 @@ ppFunctionArgumentTypes :: Type -> Doc
 ppFunctionArgumentTypes FunctionType {..} = ppParams pp (argumentTypes, isVarArg)
 
 ppCall :: Instruction -> Doc
-ppCall inst@(Call { function = Right f,..})
+ppCall Call { function = Right f,..}
   = tail <+> "call" <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
     where
       (functionType@FunctionType {..}) = referencedType (typeOf f)
@@ -425,4 +427,4 @@ ppSingleBlock :: BasicBlock -> Doc
 ppSingleBlock (BasicBlock nm instrs term) = (vcat $ (fmap pp instrs) ++ [pp term])
 
 ppllvm :: Module -> Text
-ppllvm = displayTStrict . renderPretty 0.4 100 . pp
+ppllvm = displayT . renderPretty 0.4 100 . pp
