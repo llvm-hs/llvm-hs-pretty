@@ -30,28 +30,13 @@ readir fname = do
   putStrLn $ replicate 80 '='
   str <- readFile fname
   withContext $ \ctx -> do
-    res <- runExceptT $ M.withModuleFromLLVMAssembly ctx str $ \mod -> do
+    M.withModuleFromLLVMAssembly ctx str $ \mod -> do
       ast <- M.moduleAST mod
       putStrLn $ ppShow ast
       let str = ppllvm ast
       T.putStrLn str
       T.writeFile ("tests/output" </> takeFileName fname) str
-      trip <- runExceptT $ M.withModuleFromLLVMAssembly ctx (T.unpack str) (const $ return ())
-      case trip of
-        Left err -> do
-          putStrLn "Error reading output:"
-          putStrLn err
-          writeFile ("tests/output" </> takeFileName fname) err
-          exitFailure
-        Right ast -> putStrLn "Round Tripped!"
-
-    case res of
-      Left err -> do
-        putStrLn "Error reading input:"
-        putStrLn err
-        writeFile ("tests/output" </> takeFileName fname) err
-        exitFailure
-      Right _ -> return ()
+      M.withModuleFromLLVMAssembly ctx (T.unpack str) (const $ return ())
 
 main :: IO ()
 main = do

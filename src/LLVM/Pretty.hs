@@ -3,8 +3,6 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE OverloadedStrings #-}
-
 module LLVM.Pretty (
   ppllvm,
 ) where
@@ -30,9 +28,15 @@ import qualified LLVM.AST.Float as F
 import LLVM.AST.FunctionAttribute
 
 import Data.String
+import qualified Data.ByteString.Short as SBF
+import qualified Data.ByteString.Lazy.Char8 as BF
+import Data.ByteString.Lazy(fromStrict)
+import Data.ByteString.Internal(w2c)
 
+import Data.Text.Format
 import Text.Printf
 import Data.Text.Lazy (Text, pack, unpack)
+import Data.Text.Lazy.Encoding
 import Text.PrettyPrint.Leijen.Text
 
 import Data.Char (chr, ord, isAscii, isControl, isLetter, isDigit)
@@ -98,13 +102,13 @@ instance PP Integer where
   pp = integer
 
 instance PP Name where
-  pp (Name []) = dquotes empty
-  pp (Name name@(first:_))
-    | isFirst first && all isRest name = text (pack name)
-    | otherwise = dquotes . hcat . map escape $ name
+  pp (Name name)| SBF.null name = dquotes empty
+                | isFirst (w2c $ SBF.index name 0) && BF.all isRest byteStringName = (text . decodeShortUtf8) name
+                | otherwise = dquotes . hcat . BF.foldl (\acc c -> acc ++ [escape c]) [] $ byteStringName
     where
         isFirst c = isLetter c || c == '-' || c == '_'
         isRest c = isDigit c || isFirst c
+        byteStringName = fromStrict $ SBF.fromShort name
   pp (UnName x) = int (fromIntegral x)
 
 instance PP Parameter where
@@ -118,12 +122,12 @@ instance PP (Operand, [ParameterAttribute]) where
 
 instance PP Type where
   pp (IntegerType width) = "i" <> pp width
-  pp (FloatingPointType 16    IEEE) = "half"
-  pp (FloatingPointType 32    IEEE) = "float"
-  pp (FloatingPointType 64    IEEE) = "double"
-  pp (FloatingPointType width IEEE) = "fp" <> pp width
-  pp (FloatingPointType width DoubleExtended) = "x86_fp" <> pp width
-  pp (FloatingPointType width PairOfFloats)   = "ppc_fp" <> pp width
+  pp (FloatingPointType HalfFP) = "half"
+  pp (FloatingPointType FloatFP) = "float"
+  pp (FloatingPointType DoubleFP) = "double"
+  pp (FloatingPointType FP128FP) = "fp128"
+  pp (FloatingPointType X86_FP80FP) = "x86_fp80"
+  pp (FloatingPointType PPC_FP128FP)   = "ppc_fp128"
 
   pp VoidType = "void"
   pp (PointerType ref addr) = pp ref <> "*"
@@ -158,13 +162,16 @@ instance PP Global where
 
   pp (GlobalAlias {..}) = global (pp name) <+> "=" <+> pp linkage <+> "alias" <+> pp typ `cma` ppTyped aliasee
     where
-      PointerType typ _ = type'
+      typ = getElementType type'
+
+decodeShortUtf8 :: SBF.ShortByteString -> Text
+decodeShortUtf8 = decodeUtf8 . fromStrict . SBF.fromShort
 
 instance PP Definition where
   pp (GlobalDefinition x) = pp x
   pp (TypeDefinition nm ty) = local (pp nm) <+> "=" <+> "type" <+> maybe "opaque" pp ty
   pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap pp attrs))
-  pp (NamedMetadataDefinition nm meta) = text (pack nm)
+  pp (NamedMetadataDefinition nm meta) = text (decodeShortUtf8 nm)
   pp (MetadataNodeDefinition node meta) = pp node
 
 instance PP FunctionAttribute where
@@ -197,7 +204,7 @@ instance PP FunctionAttribute where
    SanitizeAddress     -> "TODO"
    SanitizeThread      -> "TODO"
    SanitizeMemory      -> "TODO"
-   StringAttribute k v -> dquotes (text (pack k)) <> "=" <> dquotes (text (pack v))
+   StringAttribute k v -> dquotes (text (decodeShortUtf8 k)) <> "=" <> dquotes (text (decodeShortUtf8 v))
 
 instance PP L.Linkage where
     pp = ppLinkage False
@@ -270,7 +277,7 @@ instance PP Instruction where
     Trunc {..}  -> "trunc" <+> ppTyped operand0 <+> "to" <+> pp type'
 
     GetElementPtr {..} -> "getelementptr" <+> bounds inBounds <+> commas (pp argTy : fmap ppTyped (address:indices))
-      where PointerType argTy _ = typeOf address
+      where argTy = getElementType $ typeOf address
     ExtractValue {..} -> "extractvalue" <+> commas (ppTyped aggregate : fmap pp indices')
 
     BitCast {..} -> "bitcast" <+> ppTyped operand0 <+> "to" <+> pp type'
@@ -307,7 +314,7 @@ instance PP C.Constant where
 
   pp C.GetElementPtr {..} = "getelementptr" <+> bounds inBounds <+> parens (commas (pp argTy : fmap ppTyped (address:indices)))
     where
-      PointerType argTy _ = typeOf address
+      argTy = getElementType $ typeOf address
       bounds True = "inbounds"
       bounds False = empty
 
@@ -323,8 +330,8 @@ instance PP a => PP (Named a) where
 
 instance PP Module where
   pp Module {..} =
-    let header = printf "; ModuleID = '%s'" moduleName in
-    hlinecat (fromString header : (fmap pp moduleDefinitions))
+    let header = format "; ModuleID = '{}'" (Only $ decodeShortUtf8 moduleName) in
+    hlinecat ((text header) : (fmap pp moduleDefinitions))
 
 instance PP FP.FloatingPointPredicate where
   pp op = case op of

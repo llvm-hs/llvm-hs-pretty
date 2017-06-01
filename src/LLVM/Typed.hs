@@ -2,6 +2,7 @@
 
 module LLVM.Typed (
   Typed(..),
+  getElementType
 ) where
 
 import LLVM.AST
@@ -10,7 +11,6 @@ import LLVM.AST.Type
 
 import qualified LLVM.AST.Constant as C
 import qualified LLVM.AST.Float as F
-
 -----
 -- Reasoning about types
 -----
@@ -63,6 +63,7 @@ instance Typed C.Constant where
     typeOf (C.FPTrunc {..}) = type'
     typeOf (C.FPExt {..})   = type'
     typeOf (C.PtrToInt {..})    = type'
+    typeOf (C.IntToPtr {..})    = type'
     typeOf (C.BitCast {..})     = type'
     typeOf (C.ICmp {..})    = case (typeOf operand0) of
                                 (VectorType n _) -> VectorType n i1
@@ -73,7 +74,7 @@ instance Typed C.Constant where
     typeOf (C.Select {..})  = typeOf trueValue
     typeOf (C.ExtractElement {..})  = case typeOf vector of
                                         (VectorType _ t) -> t
-                                        _ -> VoidType {- error "The first operand of an ‘extractelement‘ instruction is a value of vector type." -}
+                                        _ -> VoidType {- error "The first operand of an ï¿½extractelementï¿½ instruction is a value of vector type." -}
     typeOf (C.InsertElement {..})   = typeOf vector
     typeOf (C.ShuffleVector {..})   = case (typeOf operand0, typeOf mask) of
                                         (VectorType _ t, VectorType m _) -> VectorType m t
@@ -84,15 +85,19 @@ instance Typed C.Constant where
 getElementPtrType :: Type -> [C.Constant] -> Type
 getElementPtrType ty cons = ptr i8 -- XXX
 
+getElementType :: Type -> Type
+getElementType (PointerType t _) = t
+getElementType t = error $ "this should be a pointer type" ++ show t
+
 extractValueType = error "extract"
 
 instance Typed F.SomeFloat where
-    typeOf (F.Half _)          = FloatingPointType 16  IEEE
-    typeOf (F.Single _)        = FloatingPointType 32  IEEE
-    typeOf (F.Double _)        = FloatingPointType 64  IEEE
-    typeOf (F.Quadruple _ _)   = FloatingPointType 128 IEEE
-    typeOf (F.X86_FP80 _ _)    = FloatingPointType 80  DoubleExtended
-    typeOf (F.PPC_FP128 _ _)   = FloatingPointType 128 PairOfFloats
+    typeOf (F.Half _)          = FloatingPointType HalfFP
+    typeOf (F.Single _)        = FloatingPointType FloatFP
+    typeOf (F.Double _)        = FloatingPointType DoubleFP
+    typeOf (F.Quadruple _ _)   = FloatingPointType FP128FP
+    typeOf (F.X86_FP80 _ _)    = FloatingPointType X86_FP80FP
+    typeOf (F.PPC_FP128 _ _)   = FloatingPointType PPC_FP128FP
 
 instance Typed Global where
     typeOf (GlobalVariable {..}) = type'
