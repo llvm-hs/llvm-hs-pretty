@@ -139,16 +139,19 @@ instance PP Global where
   pp (Function {..}) =
       case basicBlocks of
         [] ->
-          ("declare" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams (pp . typeOf) parameters <+> fnAttrs <+> gcName)
+          ("declare" <+> pp linkage <+> pp callingConvention <+> pp returnType <+> global (pp name)
+            <> ppParams (pp . typeOf) parameters <+> fnAttrs <+> gcName)
 
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
-            ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters <+> fnAttrs <+> gcName)
+            ("define" <+> pp linkage <+> pp callingConvention <+> pp returnType <+> global (pp name)
+              <> ppParams pp parameters <+> fnAttrs <+> gcName)
             `wrapbraces` (indent 2 $ ppSingleBlock b)
 
         bs ->
-          ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters <+> fnAttrs <+> gcName)
-           `wrapbraces` (vcat $ fmap pp bs)
+          ("define" <+> pp linkage <+> pp callingConvention <+> pp returnType <+> global (pp name)
+            <> ppParams pp parameters <+> fnAttrs <+> gcName)
+          `wrapbraces` (vcat $ fmap pp bs)
     where
       fnAttrs = hsep $ fmap pp functionAttributes
       gcName = maybe empty (\n -> "gc" <+> dquotes (text $ pack n)) garbageCollectorName
@@ -202,6 +205,33 @@ instance PP FunctionAttribute where
    SanitizeThread      -> "sanitize_thread"
    SanitizeMemory      -> "sanitize_memory"
    StringAttribute k v -> dquotes (text (pack k)) <> "=" <> dquotes (text (pack v))
+
+instance PP CC.CallingConvention where
+  pp x = case x of
+   CC.Numbered word -> "cc" <+> pp word
+   CC.C             -> "ccc"
+   CC.Fast          -> "fastcc"
+   CC.Cold          -> "coldcc"
+   CC.GHC           -> "cc 10"
+   CC.HiPE          -> "cc 11"
+   CC.WebKit_JS     -> "webkit_jscc"
+   CC.AnyReg        -> "anyregcc"
+   CC.PreserveMost  -> "preserve_mostcc"
+   CC.PreserveAll   -> "preserve_allcc"
+   CC.X86_StdCall   -> "cc 64"
+   CC.X86_FastCall  -> "cc 65"
+   CC.ARM_APCS      -> "cc 66"
+   CC.ARM_AAPCS     -> "cc 67"
+   CC.ARM_AAPCS_VFP -> "cc 68"
+   CC.MSP430_INTR   -> "cc 69"
+   CC.X86_ThisCall  -> "cc 70"
+   CC.PTX_Kernel    -> "cc 71"
+   CC.PTX_Device    -> "cc 72"
+   CC.SPIR_FUNC     -> "cc 75"
+   CC.SPIR_KERNEL   -> "cc 76"
+   CC.Intel_OCL_BI  -> "cc 77"
+   CC.X86_64_SysV   -> "cc 78"
+   CC.X86_64_Win64  -> "cc 79"
 
 instance PP L.Linkage where
     pp = ppLinkage False
@@ -408,7 +438,7 @@ ppFunctionArgumentTypes FunctionType {..} = ppParams pp (argumentTypes, isVarArg
 
 ppCall :: Instruction -> Doc
 ppCall Call { function = Right f,..}
-  = tail <+> "call" <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
+  = tail <+> "call" <+> pp callingConvention <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
     where
       (functionType@FunctionType {..}) = referencedType (typeOf f)
       ftype = if isVarArg || isFunctionPtr resultType
