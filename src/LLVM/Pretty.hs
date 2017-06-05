@@ -139,18 +139,19 @@ instance PP Global where
   pp (Function {..}) =
       case basicBlocks of
         [] ->
-          ("declare" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams (pp . typeOf) parameters <+> fnAttrs)
+          ("declare" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams (pp . typeOf) parameters <+> fnAttrs <+> gcName)
 
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
-            ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters <+> fnAttrs)
+            ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters <+> fnAttrs <+> gcName)
             `wrapbraces` (indent 2 $ ppSingleBlock b)
 
         bs ->
-          ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters <+> fnAttrs)
+          ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters <+> fnAttrs <+> gcName)
            `wrapbraces` (vcat $ fmap pp bs)
     where
       fnAttrs = hsep $ fmap pp functionAttributes
+      gcName = maybe empty (\n -> "gc" <+> dquotes (text $ pack n)) garbageCollectorName
 
   pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> kind <+> pp type' <+> ppMaybe initializer
     where
