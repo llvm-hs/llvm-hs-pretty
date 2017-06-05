@@ -139,16 +139,18 @@ instance PP Global where
   pp (Function {..}) =
       case basicBlocks of
         [] ->
-          ("declare" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams (pp . typeOf) parameters)
+          ("declare" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams (pp . typeOf) parameters <+> fnAttrs)
 
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
-            ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters)
+            ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters <+> fnAttrs)
             `wrapbraces` (indent 2 $ ppSingleBlock b)
 
         bs ->
-          ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters)
+          ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters <+> fnAttrs)
            `wrapbraces` (vcat $ fmap pp bs)
+    where
+      fnAttrs = hsep $ fmap pp functionAttributes
 
   pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> kind <+> pp type' <+> ppMaybe initializer
     where
@@ -178,25 +180,26 @@ instance PP FunctionAttribute where
    MinimizeSize        -> "minimizesize"
    OptimizeForSize     -> "optimizeforsize"
    OptimizeNone        -> "optimizenone"
-   StackProtect        -> "stackprotect"
-   StackProtectReq     -> "stackprotectreq"
-   StackProtectStrong  -> "stackprotectstrong"
+   SafeStack           -> "safestack"
+   StackProtect        -> "ssp"
+   StackProtectReq     -> "sspreq"
+   StackProtectStrong  -> "sspstrong"
    NoRedZone           -> "noredzone"
    NoImplicitFloat     -> "noimplicitfloat"
    Naked               -> "naked"
    InlineHint          -> "inlinehint"
    StackAlignment n    -> "stackalign"
-   ReturnsTwice        -> "TODO"
+   ReturnsTwice        -> "returns_twice"
    UWTable             -> "uwtable"
-   NonLazyBind         -> "TODO"
-   Builtin             -> "TODO"
-   NoBuiltin           -> "TODO"
-   Cold                -> "TODO"
+   NonLazyBind         -> "nonlazybind"
+   Builtin             -> "builtin"
+   NoBuiltin           -> "nobuiltin"
+   Cold                -> "cold"
    JumpTable           -> "TODO"
-   NoDuplicate         -> "TODO"
-   SanitizeAddress     -> "TODO"
-   SanitizeThread      -> "TODO"
-   SanitizeMemory      -> "TODO"
+   NoDuplicate         -> "noduplicate"
+   SanitizeAddress     -> "sanitize_address"
+   SanitizeThread      -> "sanitize_thread"
+   SanitizeMemory      -> "sanitize_memory"
    StringAttribute k v -> dquotes (text (pack k)) <> "=" <> dquotes (text (pack v))
 
 instance PP L.Linkage where
@@ -286,6 +289,10 @@ instance PP Instruction where
 instance PP CallableOperand where
   pp (Left asm) = error "CallableOperand"
   pp (Right op) = pp op
+
+instance PP (Either GroupID FunctionAttribute) where
+  pp (Left gid) = pp gid
+  pp (Right fattr) = pp fattr
 
 instance PP Operand where
   pp (LocalReference _ nm) = local (pp nm)
