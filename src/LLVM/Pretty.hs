@@ -72,9 +72,6 @@ global a = "@" <> a
 label :: Doc -> Doc
 label a = "label" <+> "%" <> a
 
-isFunctionPtr (PointerType FunctionType {..} _) = True
-isFunctionPtr _ = False
-
 cma :: Doc -> Doc -> Doc -- <,> does not work :(
 a `cma` b = a <> "," <+> b
 
@@ -448,8 +445,8 @@ ppCall Call { function = Right f,..}
   = tail <+> "call" <+> pp callingConvention <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
     where
       (functionType@FunctionType {..}) = referencedType (typeOf f)
-      ftype = if isVarArg || isFunctionPtr resultType
-              then ppFunctionArgumentTypes functionType <> "*"
+      ftype = if isVarArg
+              then ppFunctionArgumentTypes functionType
               else empty
       referencedType (PointerType t _) = referencedType t
       referencedType t                 = t
