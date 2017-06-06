@@ -27,7 +27,8 @@ import qualified LLVM.AST.FloatingPointPredicate as FP
 import qualified LLVM.AST.IntegerPredicate as IP
 import qualified LLVM.AST.AddrSpace as AS
 import qualified LLVM.AST.Float as F
-import LLVM.AST.FunctionAttribute
+import LLVM.AST.ParameterAttribute as PA
+import LLVM.AST.FunctionAttribute as FA
 
 import Data.String
 
@@ -105,14 +106,17 @@ instance PP Name where
   pp (UnName x) = int (fromIntegral x)
 
 instance PP Parameter where
-  pp (Parameter ty (UnName _) attrs) = pp ty
-  pp (Parameter ty name attrs) = pp ty <+> local (pp name)
+  pp (Parameter ty (UnName _) attrs) = pp ty <+> pp attrs
+  pp (Parameter ty name attrs) = pp ty <+> pp attrs <+> local (pp name)
+
+instance PP [ParameterAttribute] where
+  pp x = hsep $ fmap pp x
 
 instance PP ([Parameter], Bool) where
   pp (params, False) = commas (fmap pp params)
 
 instance PP (Operand, [ParameterAttribute]) where
-  pp (op, attrs) = ppTyped op
+  pp (op, attrs) = pp (typeOf op) <+> pp attrs <+> pp op
 
 instance PP UnnamedAddr where
   pp LocalAddr = "local_unnamed_addr"
@@ -182,8 +186,9 @@ instance PP FunctionAttribute where
   pp x = case x of
    NoReturn            -> "noreturn"
    NoUnwind            -> "nounwind"
-   ReadNone            -> "readnone"
-   ReadOnly            -> "readonly"
+   FA.ReadNone         -> "readnone"
+   FA.ReadOnly         -> "readonly"
+   FA.WriteOnly        -> "writeonly"
    NoInline            -> "noinline"
    AlwaysInline        -> "alwaysinline"
    MinimizeSize        -> "minimizesize"
@@ -210,6 +215,28 @@ instance PP FunctionAttribute where
    SanitizeThread      -> "sanitize_thread"
    SanitizeMemory      -> "sanitize_memory"
    StringAttribute k v -> dquotes (text (pack k)) <> "=" <> dquotes (text (pack v))
+
+instance PP ParameterAttribute where
+  pp x = case x of
+    ZeroExt                    -> "zeroext"
+    SignExt                    -> "signext"
+    InReg                      -> "inreg"
+    SRet                       -> "sret"
+    Alignment word             -> "align" <+> pp word
+    NoAlias                    -> "noalias"
+    ByVal                      -> "byval"
+    NoCapture                  -> "nocapture"
+    Nest                       -> "nest"
+    PA.ReadNone                -> "TODO"
+    PA.ReadOnly                -> "TODO"
+    PA.WriteOnly               -> "TODO"
+    InAlloca                   -> "inalloca"
+    NonNull                    -> "nonnull"
+    Dereferenceable word       -> "dereferenceable" <> parens (pp word)
+    DereferenceableOrNull word -> "dereferenceable_or_null" <> parens (pp word)
+    Returned                   -> "returned"
+    SwiftSelf                  -> "swiftself"
+    SwiftError                 -> "swifterror"
 
 instance PP CC.CallingConvention where
   pp x = case x of
@@ -447,7 +474,7 @@ ppFunctionArgumentTypes FunctionType {..} = ppParams pp (argumentTypes, isVarArg
 
 ppCall :: Instruction -> Doc
 ppCall Call { function = Right f,..}
-  = tail <+> "call" <+> pp callingConvention <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
+  = tail <+> "call" <+> pp callingConvention <+> pp returnAttributes <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
     where
       (functionType@FunctionType {..}) = referencedType (typeOf f)
       ftype = if isVarArg
