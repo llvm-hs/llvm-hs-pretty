@@ -343,6 +343,7 @@ instance PP C.Constant where
 
   pp (C.Struct _ _ elems) = spacedbraces $ commas $ fmap ppTyped elems
   pp (C.Null {}) = "null"
+  pp (C.Undef {}) = "undef"
 
   pp C.Array {..}
     | memberType == (IntegerType 8) = "c" <> (dquotes $ hcat [ppIntAsChar val | C.Int _ val <- memberValues])
