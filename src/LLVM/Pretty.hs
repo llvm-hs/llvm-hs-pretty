@@ -108,6 +108,7 @@ instance PP Name where
   pp (UnName x) = int (fromIntegral x)
 
 instance PP Parameter where
+  pp (Parameter ty (UnName _) attrs) = pp ty
   pp (Parameter ty name attrs) = pp ty <+> local (pp name)
 
 instance PP ([Parameter], Bool) where
