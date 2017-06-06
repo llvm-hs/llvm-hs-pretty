@@ -140,23 +140,26 @@ instance PP Global where
       case basicBlocks of
         [] ->
           ("declare" <+> pp linkage <+> pp callingConvention <+> pp returnType <+> global (pp name)
-            <> ppParams (pp . typeOf) parameters <+> fnAttrs <+> gcName)
+            <> ppParams (pp . typeOf) parameters <+> fnAttrs <+> align <+> gcName)
 
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
             ("define" <+> pp linkage <+> pp callingConvention <+> pp returnType <+> global (pp name)
-              <> ppParams pp parameters <+> fnAttrs <+> gcName)
+              <> ppParams pp parameters <+> fnAttrs <+> align <+> gcName)
             `wrapbraces` (indent 2 $ ppSingleBlock b)
 
         bs ->
           ("define" <+> pp linkage <+> pp callingConvention <+> pp returnType <+> global (pp name)
-            <> ppParams pp parameters <+> fnAttrs <+> gcName)
+            <> ppParams pp parameters <+> fnAttrs <+> align <+> gcName)
           `wrapbraces` (vcat $ fmap pp bs)
     where
+      align | alignment == 0    = empty
+            | otherwise = "align" <+> pp alignment
       fnAttrs = hsep $ fmap pp functionAttributes
       gcName = maybe empty (\n -> "gc" <+> dquotes (text $ pack n)) garbageCollectorName
 
-  pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> kind <+> pp type' <+> ppMaybe initializer
+  pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> kind <+> pp type'
+                             <+> ppMaybe initializer <> ppAlign alignment
     where
       hasInitializer = isJust initializer
       kind | isConstant = "constant"
@@ -287,13 +290,11 @@ instance PP Instruction where
 
     FCmp {..}   -> "fcmp" <+> pp fpPredicate <+> ppTyped operand0 `cma` pp operand1
 
-    Alloca {..} -> "alloca" <+> pp allocatedType <> num <> align
+    Alloca {..} -> "alloca" <+> pp allocatedType <> num <> ppAlign alignment
       where num   = case numElements of Nothing -> empty
                                         Just o -> "," <+> ppTyped o
-            align | alignment == 0 = empty
-                  | otherwise      = "," <+> pp alignment
-    Store {..}  -> "store" <+> ppTyped value `cma` ppTyped address
-    Load {..}   -> "load" <+> pp argTy `cma` ppTyped address
+    Store {..}  -> "store" <+> ppTyped value `cma` ppTyped address <> ppAlign alignment
+    Load {..}   -> "load" <+> pp argTy `cma` ppTyped address <> ppAlign alignment
       where PointerType argTy _ = typeOf address
     Phi {..}    -> "phi" <+> pp type' <+> commas (fmap phiIncoming incomingValues)
 
@@ -419,6 +420,9 @@ escape c    = if isAscii c && not (isControl c)
 ppIntAsChar :: Integral a => a -> Doc
 ppIntAsChar = escape . chr . fromIntegral
 
+ppAlign :: Word32 -> Doc
+ppAlign x | x == 0    = empty
+          | otherwise = ", align" <+> pp x
 
 -- print an operand and its type
 ppTyped :: (PP a, Typed a) => a -> Doc
