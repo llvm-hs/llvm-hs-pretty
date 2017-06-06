@@ -139,16 +139,22 @@ instance PP Global where
   pp (Function {..}) =
       case basicBlocks of
         [] ->
-          ("declare" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams (pp . typeOf) parameters)
+          ("declare" <+> pp linkage <+> pp callingConvention <+> pp returnType <+> global (pp name)
+            <> ppParams (pp . typeOf) parameters <+> fnAttrs <+> gcName)
 
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
-            ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters)
+            ("define" <+> pp linkage <+> pp callingConvention <+> pp returnType <+> global (pp name)
+              <> ppParams pp parameters <+> fnAttrs <+> gcName)
             `wrapbraces` (indent 2 $ ppSingleBlock b)
 
         bs ->
-          ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters)
-           `wrapbraces` (vcat $ fmap pp bs)
+          ("define" <+> pp linkage <+> pp callingConvention <+> pp returnType <+> global (pp name)
+            <> ppParams pp parameters <+> fnAttrs <+> gcName)
+          `wrapbraces` (vcat $ fmap pp bs)
+    where
+      fnAttrs = hsep $ fmap pp functionAttributes
+      gcName = maybe empty (\n -> "gc" <+> dquotes (text $ pack n)) garbageCollectorName
 
   pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> kind <+> pp type' <+> ppMaybe initializer
     where
@@ -178,26 +184,54 @@ instance PP FunctionAttribute where
    MinimizeSize        -> "minimizesize"
    OptimizeForSize     -> "optimizeforsize"
    OptimizeNone        -> "optimizenone"
-   StackProtect        -> "stackprotect"
-   StackProtectReq     -> "stackprotectreq"
-   StackProtectStrong  -> "stackprotectstrong"
+   SafeStack           -> "safestack"
+   StackProtect        -> "ssp"
+   StackProtectReq     -> "sspreq"
+   StackProtectStrong  -> "sspstrong"
    NoRedZone           -> "noredzone"
    NoImplicitFloat     -> "noimplicitfloat"
    Naked               -> "naked"
    InlineHint          -> "inlinehint"
    StackAlignment n    -> "stackalign"
-   ReturnsTwice        -> "TODO"
+   ReturnsTwice        -> "returns_twice"
    UWTable             -> "uwtable"
-   NonLazyBind         -> "TODO"
-   Builtin             -> "TODO"
-   NoBuiltin           -> "TODO"
-   Cold                -> "TODO"
+   NonLazyBind         -> "nonlazybind"
+   Builtin             -> "builtin"
+   NoBuiltin           -> "nobuiltin"
+   Cold                -> "cold"
    JumpTable           -> "TODO"
-   NoDuplicate         -> "TODO"
-   SanitizeAddress     -> "TODO"
-   SanitizeThread      -> "TODO"
-   SanitizeMemory      -> "TODO"
+   NoDuplicate         -> "noduplicate"
+   SanitizeAddress     -> "sanitize_address"
+   SanitizeThread      -> "sanitize_thread"
+   SanitizeMemory      -> "sanitize_memory"
    StringAttribute k v -> dquotes (text (pack k)) <> "=" <> dquotes (text (pack v))
+
+instance PP CC.CallingConvention where
+  pp x = case x of
+   CC.Numbered word -> "cc" <+> pp word
+   CC.C             -> "ccc"
+   CC.Fast          -> "fastcc"
+   CC.Cold          -> "coldcc"
+   CC.GHC           -> "cc 10"
+   CC.HiPE          -> "cc 11"
+   CC.WebKit_JS     -> "webkit_jscc"
+   CC.AnyReg        -> "anyregcc"
+   CC.PreserveMost  -> "preserve_mostcc"
+   CC.PreserveAll   -> "preserve_allcc"
+   CC.X86_StdCall   -> "cc 64"
+   CC.X86_FastCall  -> "cc 65"
+   CC.ARM_APCS      -> "cc 66"
+   CC.ARM_AAPCS     -> "cc 67"
+   CC.ARM_AAPCS_VFP -> "cc 68"
+   CC.MSP430_INTR   -> "cc 69"
+   CC.X86_ThisCall  -> "cc 70"
+   CC.PTX_Kernel    -> "cc 71"
+   CC.PTX_Device    -> "cc 72"
+   CC.SPIR_FUNC     -> "cc 75"
+   CC.SPIR_KERNEL   -> "cc 76"
+   CC.Intel_OCL_BI  -> "cc 77"
+   CC.X86_64_SysV   -> "cc 78"
+   CC.X86_64_Win64  -> "cc 79"
 
 instance PP L.Linkage where
     pp = ppLinkage False
@@ -240,6 +274,8 @@ instance PP Instruction where
     Shl {..}    -> "shl"  <+> ppTyped operand0 `cma` pp operand1
     AShr {..}   -> "ashr" <+> ppTyped operand0 `cma` pp operand1
     And {..}    -> "and"  <+> ppTyped operand0 `cma` pp operand1
+    Or {..}     -> "or"   <+> ppTyped operand0 `cma` pp operand1
+    Xor {..}    -> "xor"  <+> ppTyped operand0 `cma` pp operand1
     SDiv {..}   -> "sdiv"  <+> ppTyped operand0 `cma` pp operand1
     UDiv {..}   -> "udiv"  <+> ppTyped operand0 `cma` pp operand1
     SRem {..}   -> "srem"  <+> ppTyped operand0 `cma` pp operand1
@@ -286,6 +322,10 @@ instance PP Instruction where
 instance PP CallableOperand where
   pp (Left asm) = error "CallableOperand"
   pp (Right op) = pp op
+
+instance PP (Either GroupID FunctionAttribute) where
+  pp (Left gid) = pp gid
+  pp (Right fattr) = pp fattr
 
 instance PP Operand where
   pp (LocalReference _ nm) = local (pp nm)
@@ -400,7 +440,7 @@ ppFunctionArgumentTypes FunctionType {..} = ppParams pp (argumentTypes, isVarArg
 
 ppCall :: Instruction -> Doc
 ppCall Call { function = Right f,..}
-  = tail <+> "call" <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
+  = tail <+> "call" <+> pp callingConvention <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
     where
       (functionType@FunctionType {..}) = referencedType (typeOf f)
       ftype = if isVarArg || isFunctionPtr resultType
