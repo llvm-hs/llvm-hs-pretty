@@ -37,7 +37,7 @@ for.cond1:                                        ; preds = %for.inc1, %for.loop
 for.loop1:                                        ; preds = %for.cond1
   %8 = load i32, i32* %4
   %9 = add i32 %3, %8
-  %10 = call i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([3 x i8]* @"%i", i32 0, i32 0), i32 %9)
+  %10 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @"%i", i32 0, i32 0), i32 %9)
   br label %for.inc1
 
 for.inc1:                                         ; preds = %for.loop1
