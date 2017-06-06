@@ -145,23 +145,25 @@ instance PP Global where
   pp (Function {..}) =
       case basicBlocks of
         [] ->
-          ("declare" <+> pp linkage <+> pp callingConvention <+> pp returnType <+> global (pp name)
-            <> ppParams (pp . typeOf) parameters <+> fnAttrs <+> align <+> gcName)
+          ("declare" <+> pp linkage <+> pp callingConvention
+            <+> pp returnAttributes <+> pp returnType <+> global (pp name)
+            <> ppParams (pp . typeOf) parameters <+> pp functionAttributes <+> align <+> gcName)
 
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
-            ("define" <+> pp linkage <+> pp callingConvention <+> pp returnType <+> global (pp name)
-              <> ppParams pp parameters <+> fnAttrs <+> align <+> gcName)
+            ("define" <+> pp linkage <+> pp callingConvention
+              <+> pp returnAttributes <+> pp returnType <+> global (pp name)
+              <> ppParams pp parameters <+> pp functionAttributes <+> align <+> gcName)
             `wrapbraces` (indent 2 $ ppSingleBlock b)
 
         bs ->
-          ("define" <+> pp linkage <+> pp callingConvention <+> pp returnType <+> global (pp name)
-            <> ppParams pp parameters <+> fnAttrs <+> align <+> gcName)
+          ("define" <+> pp linkage <+> pp callingConvention
+            <+> pp returnAttributes <+> pp returnType <+> global (pp name)
+            <> ppParams pp parameters <+> pp functionAttributes <+> align <+> gcName)
           `wrapbraces` (vcat $ fmap pp bs)
     where
       align | alignment == 0    = empty
             | otherwise = "align" <+> pp alignment
-      fnAttrs = hsep $ fmap pp functionAttributes
       gcName = maybe empty (\n -> "gc" <+> dquotes (text $ pack n)) garbageCollectorName
 
   pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> ppMaybe unnamedAddr
@@ -353,6 +355,9 @@ instance PP CallableOperand where
   pp (Left asm) = error "CallableOperand"
   pp (Right op) = pp op
 
+instance PP [Either GroupID FunctionAttribute] where
+  pp x = hsep $ fmap pp x
+
 instance PP (Either GroupID FunctionAttribute) where
   pp (Left gid) = pp gid
   pp (Right fattr) = pp fattr
@@ -474,7 +479,8 @@ ppFunctionArgumentTypes FunctionType {..} = ppParams pp (argumentTypes, isVarArg
 
 ppCall :: Instruction -> Doc
 ppCall Call { function = Right f,..}
-  = tail <+> "call" <+> pp callingConvention <+> pp returnAttributes <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
+  = tail <+> "call" <+> pp callingConvention <+> pp returnAttributes <+> pp resultType <+> ftype
+    <+> pp f <> parens (commas $ fmap pp arguments) <+> pp functionAttributes
     where
       (functionType@FunctionType {..}) = referencedType (typeOf f)
       ftype = if isVarArg
