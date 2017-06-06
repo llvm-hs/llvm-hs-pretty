@@ -114,6 +114,10 @@ instance PP ([Parameter], Bool) where
 instance PP (Operand, [ParameterAttribute]) where
   pp (op, attrs) = ppTyped op
 
+instance PP UnnamedAddr where
+  pp LocalAddr = "local_unnamed_addr"
+  pp GlobalAddr = "unnamed_addr"
+
 instance PP Type where
   pp (IntegerType width) = "i" <> pp width
   pp (FloatingPointType 16    IEEE) = "half"
@@ -156,14 +160,14 @@ instance PP Global where
       fnAttrs = hsep $ fmap pp functionAttributes
       gcName = maybe empty (\n -> "gc" <+> dquotes (text $ pack n)) garbageCollectorName
 
-  pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> kind <+> pp type'
-                             <+> ppMaybe initializer <> ppAlign alignment
+  pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> ppMaybe unnamedAddr
+                             <+> kind <+> pp type' <+> ppMaybe initializer <> ppAlign alignment
     where
       hasInitializer = isJust initializer
       kind | isConstant = "constant"
            | otherwise  = "global"
 
-  pp (GlobalAlias {..}) = global (pp name) <+> "=" <+> pp linkage <+> "alias" <+> pp typ `cma` ppTyped aliasee
+  pp (GlobalAlias {..}) = global (pp name) <+> "=" <+> pp linkage <+> ppMaybe unnamedAddr <+> "alias" <+> pp typ `cma` ppTyped aliasee
     where
       PointerType typ _ = type'
 
