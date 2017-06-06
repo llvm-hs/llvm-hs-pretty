@@ -9,11 +9,11 @@ entry:
   br label %for.cond
 
 for.cond:                                         ; preds = %for.inc, %entry
-  %1 = load i32* %0
+  %1 = load i32, i32* %0
   br i1 true, label %for.loop, label %for.exit
 
 for.loop:                                         ; preds = %for.cond
-  %2 = load i32* %0
+  %2 = load i32, i32* %0
   %3 = alloca i32
   store i32 0, i32* %3
   br label %for.cond1
@@ -27,11 +27,11 @@ for.exit:                                         ; preds = %for.cond
   ret i32 0
 
 for.cond1:                                        ; preds = %for.inc1, %for.loop
-  %5 = load i32* %3
+  %5 = load i32, i32* %3
   br i1 true, label %for.loop1, label %for.exit1
 
 for.loop1:                                        ; preds = %for.cond1
-  %6 = load i32* %3
+  %6 = load i32, i32* %3
   %7 = call i32 @foo()
   br label %for.inc1
 

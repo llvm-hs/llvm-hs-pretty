@@ -9,12 +9,12 @@ entry:
   br label %for.cond
 
 for.cond:                                         ; preds = %for.inc, %entry
-  %1 = load i32* %0
+  %1 = load i32, i32* %0
   %2 = icmp ult i32 %1, 100
   br i1 %2, label %for.loop, label %for.exit
 
 for.loop:                                         ; preds = %for.cond
-  %3 = load i32* %0
+  %3 = load i32, i32* %0
   %4 = call i32 @foo(i32 %3)
   br label %for.inc
 

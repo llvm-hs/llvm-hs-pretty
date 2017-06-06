@@ -13,7 +13,7 @@ define double @bar(double %a) {
 entry:
   %0 = alloca double
   store double %a, double* %0
-  %1 = load double* %0
+  %1 = load double, double* %0
   %2 = call double @foo(double %1, double 4.000000e+00)
   %3 = call double @bar(double 3.133700e+04)
   %4 = fadd double %2, %3
