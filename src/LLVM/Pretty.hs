@@ -27,7 +27,8 @@ import qualified LLVM.AST.FloatingPointPredicate as FP
 import qualified LLVM.AST.IntegerPredicate as IP
 import qualified LLVM.AST.AddrSpace as AS
 import qualified LLVM.AST.Float as F
-import LLVM.AST.FunctionAttribute
+import LLVM.AST.ParameterAttribute as PA
+import LLVM.AST.FunctionAttribute as FA
 
 import Data.String
 
@@ -72,9 +73,6 @@ global a = "@" <> a
 label :: Doc -> Doc
 label a = "label" <+> "%" <> a
 
-isFunctionPtr (PointerType FunctionType {..} _) = True
-isFunctionPtr _ = False
-
 cma :: Doc -> Doc -> Doc -- <,> does not work :(
 a `cma` b = a <> "," <+> b
 
@@ -108,13 +106,21 @@ instance PP Name where
   pp (UnName x) = int (fromIntegral x)
 
 instance PP Parameter where
-  pp (Parameter ty name attrs) = pp ty <+> local (pp name)
+  pp (Parameter ty (UnName _) attrs) = pp ty <+> pp attrs
+  pp (Parameter ty name attrs) = pp ty <+> pp attrs <+> local (pp name)
+
+instance PP [ParameterAttribute] where
+  pp x = hsep $ fmap pp x
 
 instance PP ([Parameter], Bool) where
   pp (params, False) = commas (fmap pp params)
 
 instance PP (Operand, [ParameterAttribute]) where
-  pp (op, attrs) = ppTyped op
+  pp (op, attrs) = pp (typeOf op) <+> pp attrs <+> pp op
+
+instance PP UnnamedAddr where
+  pp LocalAddr = "local_unnamed_addr"
+  pp GlobalAddr = "unnamed_addr"
 
 instance PP Type where
   pp (IntegerType width) = "i" <> pp width
@@ -139,30 +145,35 @@ instance PP Global where
   pp (Function {..}) =
       case basicBlocks of
         [] ->
-          ("declare" <+> pp linkage <+> pp callingConvention <+> pp returnType <+> global (pp name)
-            <> ppParams (pp . typeOf) parameters <+> fnAttrs <+> gcName)
+          ("declare" <+> pp linkage <+> pp callingConvention
+            <+> pp returnAttributes <+> pp returnType <+> global (pp name)
+            <> ppParams (pp . typeOf) parameters <+> pp functionAttributes <+> align <+> gcName)
 
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
-            ("define" <+> pp linkage <+> pp callingConvention <+> pp returnType <+> global (pp name)
-              <> ppParams pp parameters <+> fnAttrs <+> gcName)
+            ("define" <+> pp linkage <+> pp callingConvention
+              <+> pp returnAttributes <+> pp returnType <+> global (pp name)
+              <> ppParams pp parameters <+> pp functionAttributes <+> align <+> gcName)
             `wrapbraces` (indent 2 $ ppSingleBlock b)
 
         bs ->
-          ("define" <+> pp linkage <+> pp callingConvention <+> pp returnType <+> global (pp name)
-            <> ppParams pp parameters <+> fnAttrs <+> gcName)
+          ("define" <+> pp linkage <+> pp callingConvention
+            <+> pp returnAttributes <+> pp returnType <+> global (pp name)
+            <> ppParams pp parameters <+> pp functionAttributes <+> align <+> gcName)
           `wrapbraces` (vcat $ fmap pp bs)
     where
-      fnAttrs = hsep $ fmap pp functionAttributes
+      align | alignment == 0    = empty
+            | otherwise = "align" <+> pp alignment
       gcName = maybe empty (\n -> "gc" <+> dquotes (text $ pack n)) garbageCollectorName
 
-  pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> kind <+> pp type' <+> ppMaybe initializer
+  pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> ppMaybe unnamedAddr
+                             <+> kind <+> pp type' <+> ppMaybe initializer <> ppAlign alignment
     where
       hasInitializer = isJust initializer
       kind | isConstant = "constant"
            | otherwise  = "global"
 
-  pp (GlobalAlias {..}) = global (pp name) <+> "=" <+> pp linkage <+> "alias" <+> pp typ `cma` ppTyped aliasee
+  pp (GlobalAlias {..}) = global (pp name) <+> "=" <+> pp linkage <+> ppMaybe unnamedAddr <+> "alias" <+> pp typ `cma` ppTyped aliasee
     where
       PointerType typ _ = type'
 
@@ -177,8 +188,9 @@ instance PP FunctionAttribute where
   pp x = case x of
    NoReturn            -> "noreturn"
    NoUnwind            -> "nounwind"
-   ReadNone            -> "readnone"
-   ReadOnly            -> "readonly"
+   FA.ReadNone         -> "readnone"
+   FA.ReadOnly         -> "readonly"
+   FA.WriteOnly        -> "writeonly"
    NoInline            -> "noinline"
    AlwaysInline        -> "alwaysinline"
    MinimizeSize        -> "minimizesize"
@@ -205,6 +217,28 @@ instance PP FunctionAttribute where
    SanitizeThread      -> "sanitize_thread"
    SanitizeMemory      -> "sanitize_memory"
    StringAttribute k v -> dquotes (text (pack k)) <> "=" <> dquotes (text (pack v))
+
+instance PP ParameterAttribute where
+  pp x = case x of
+    ZeroExt                    -> "zeroext"
+    SignExt                    -> "signext"
+    InReg                      -> "inreg"
+    SRet                       -> "sret"
+    Alignment word             -> "align" <+> pp word
+    NoAlias                    -> "noalias"
+    ByVal                      -> "byval"
+    NoCapture                  -> "nocapture"
+    Nest                       -> "nest"
+    PA.ReadNone                -> "TODO"
+    PA.ReadOnly                -> "TODO"
+    PA.WriteOnly               -> "TODO"
+    InAlloca                   -> "inalloca"
+    NonNull                    -> "nonnull"
+    Dereferenceable word       -> "dereferenceable" <> parens (pp word)
+    DereferenceableOrNull word -> "dereferenceable_or_null" <> parens (pp word)
+    Returned                   -> "returned"
+    SwiftSelf                  -> "swiftself"
+    SwiftError                 -> "swifterror"
 
 instance PP CC.CallingConvention where
   pp x = case x of
@@ -287,13 +321,11 @@ instance PP Instruction where
 
     FCmp {..}   -> "fcmp" <+> pp fpPredicate <+> ppTyped operand0 `cma` pp operand1
 
-    Alloca {..} -> "alloca" <+> pp allocatedType <> num <> align
+    Alloca {..} -> "alloca" <+> pp allocatedType <> num <> ppAlign alignment
       where num   = case numElements of Nothing -> empty
                                         Just o -> "," <+> ppTyped o
-            align | alignment == 0 = empty
-                  | otherwise      = "," <+> pp alignment
-    Store {..}  -> "store" <+> ppTyped value `cma` ppTyped address
-    Load {..}   -> "load" <+> pp argTy `cma` ppTyped address
+    Store {..}  -> "store" <+> ppTyped value `cma` ppTyped address <> ppAlign alignment
+    Load {..}   -> "load" <+> pp argTy `cma` ppTyped address <> ppAlign alignment
       where PointerType argTy _ = typeOf address
     Phi {..}    -> "phi" <+> pp type' <+> commas (fmap phiIncoming incomingValues)
 
@@ -323,6 +355,9 @@ instance PP CallableOperand where
   pp (Left asm) = error "CallableOperand"
   pp (Right op) = pp op
 
+instance PP [Either GroupID FunctionAttribute] where
+  pp x = hsep $ fmap pp x
+
 instance PP (Either GroupID FunctionAttribute) where
   pp (Left gid) = pp gid
   pp (Right fattr) = pp fattr
@@ -340,6 +375,7 @@ instance PP C.Constant where
 
   pp (C.Struct _ _ elems) = spacedbraces $ commas $ fmap ppTyped elems
   pp (C.Null {}) = "null"
+  pp (C.Undef {}) = "undef"
 
   pp C.Array {..}
     | memberType == (IntegerType 8) = "c" <> (dquotes $ hcat [ppIntAsChar val | C.Int _ val <- memberValues])
@@ -419,6 +455,9 @@ escape c    = if isAscii c && not (isControl c)
 ppIntAsChar :: Integral a => a -> Doc
 ppIntAsChar = escape . chr . fromIntegral
 
+ppAlign :: Word32 -> Doc
+ppAlign x | x == 0    = empty
+          | otherwise = ", align" <+> pp x
 
 -- print an operand and its type
 ppTyped :: (PP a, Typed a) => a -> Doc
@@ -440,11 +479,12 @@ ppFunctionArgumentTypes FunctionType {..} = ppParams pp (argumentTypes, isVarArg
 
 ppCall :: Instruction -> Doc
 ppCall Call { function = Right f,..}
-  = tail <+> "call" <+> pp callingConvention <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
+  = tail <+> "call" <+> pp callingConvention <+> pp returnAttributes <+> pp resultType <+> ftype
+    <+> pp f <> parens (commas $ fmap pp arguments) <+> pp functionAttributes
     where
       (functionType@FunctionType {..}) = referencedType (typeOf f)
-      ftype = if isVarArg || isFunctionPtr resultType
-              then ppFunctionArgumentTypes functionType <> "*"
+      ftype = if isVarArg
+              then ppFunctionArgumentTypes functionType
               else empty
       referencedType (PointerType t _) = referencedType t
       referencedType t                 = t
