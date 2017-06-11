@@ -29,7 +29,8 @@ import qualified LLVM.AST.FloatingPointPredicate as FP
 import qualified LLVM.AST.IntegerPredicate as IP
 import qualified LLVM.AST.AddrSpace as AS
 import qualified LLVM.AST.Float as F
-import LLVM.AST.FunctionAttribute
+import LLVM.AST.ParameterAttribute as PA
+import LLVM.AST.FunctionAttribute as FA
 
 import Data.String
 
@@ -75,9 +76,6 @@ global a = "@" <> a
 label :: Doc -> Doc
 label a = "label" <+> "%" <> a
 
-isFunctionPtr (PointerType FunctionType {..} _) = True
-isFunctionPtr _ = False
-
 cma :: Doc -> Doc -> Doc -- <,> does not work :(
 a `cma` b = a <> "," <+> b
 
@@ -120,14 +118,22 @@ instance PP Name where
   pp (UnName x) = int (fromIntegral x)
 
 instance PP Parameter where
-  pp (Parameter ty name attrs) = pp ty <+> local (pp name)
+  pp (Parameter ty (UnName _) attrs) = pp ty <+> pp attrs
+  pp (Parameter ty name attrs) = pp ty <+> pp attrs <+> local (pp name)
+
+instance PP [ParameterAttribute] where
+  pp x = hsep $ fmap pp x
 
 instance PP ([Parameter], Bool) where
   pp (params, False) = commas (fmap pp params)
   pp (params, True) = "TODO"
 
 instance PP (Operand, [ParameterAttribute]) where
-  pp (op, attrs) = ppTyped op
+  pp (op, attrs) = pp (typeOf op) <+> pp attrs <+> pp op
+
+instance PP UnnamedAddr where
+  pp LocalAddr = "local_unnamed_addr"
+  pp GlobalAddr = "unnamed_addr"
 
 instance PP Type where
   pp (IntegerType width) = "i" <> pp width
@@ -154,24 +160,35 @@ instance PP Global where
   pp (Function {..}) =
       case basicBlocks of
         [] ->
-          ("declare" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams (pp . typeOf) parameters)
+          ("declare" <+> pp linkage <+> pp callingConvention
+            <+> pp returnAttributes <+> pp returnType <+> global (pp name)
+            <> ppParams (pp . typeOf) parameters <+> pp functionAttributes <+> align <+> gcName)
 
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
-            ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters)
+            ("define" <+> pp linkage <+> pp callingConvention
+              <+> pp returnAttributes <+> pp returnType <+> global (pp name)
+              <> ppParams pp parameters <+> pp functionAttributes <+> align <+> gcName)
             `wrapbraces` (indent 2 $ ppSingleBlock b)
 
         bs ->
-          ("define" <+> pp linkage <+> pp returnType <+> global (pp name) <> ppParams pp parameters)
-           `wrapbraces` (vcat $ fmap pp bs)
+          ("define" <+> pp linkage <+> pp callingConvention
+            <+> pp returnAttributes <+> pp returnType <+> global (pp name)
+            <> ppParams pp parameters <+> pp functionAttributes <+> align <+> gcName)
+          `wrapbraces` (vcat $ fmap pp bs)
+    where
+      align | alignment == 0    = empty
+            | otherwise = "align" <+> pp alignment
+      gcName = maybe empty (\n -> "gc" <+> dquotes (text $ pack n)) garbageCollectorName
 
-  pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> kind <+> pp type' <+> ppMaybe initializer
+  pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> ppMaybe unnamedAddr
+                             <+> kind <+> pp type' <+> ppMaybe initializer <> ppAlign alignment
     where
       hasInitializer = isJust initializer
       kind | isConstant = "constant"
            | otherwise  = "global"
 
-  pp (GlobalAlias {..}) = global (pp name) <+> "=" <+> pp linkage <+> "alias" <+> pp typ `cma` ppTyped aliasee
+  pp (GlobalAlias {..}) = global (pp name) <+> "=" <+> pp linkage <+> ppMaybe unnamedAddr <+> "alias" <+> pp typ `cma` ppTyped aliasee
     where
       PointerType typ _ = type'
 
@@ -188,41 +205,84 @@ instance PP FunctionAttribute where
   pp = \case
    NoReturn            -> "noreturn"
    NoUnwind            -> "nounwind"
-   ReadNone            -> "readnone"
-   ReadOnly            -> "readonly"
+   FA.ReadNone         -> "readnone"
+   FA.ReadOnly         -> "readonly"
+   FA.WriteOnly        -> "writeonly"
    NoInline            -> "noinline"
    AlwaysInline        -> "alwaysinline"
    MinimizeSize        -> "minimizesize"
    OptimizeForSize     -> "optimizeforsize"
    OptimizeNone        -> "optimizenone"
-   StackProtect        -> "stackprotect"
-   StackProtectReq     -> "stackprotectreq"
-   StackProtectStrong  -> "stackprotectstrong"
+   SafeStack           -> "safestack"
+   StackProtect        -> "ssp"
+   StackProtectReq     -> "sspreq"
+   StackProtectStrong  -> "sspstrong"
    NoRedZone           -> "noredzone"
    NoImplicitFloat     -> "noimplicitfloat"
    Naked               -> "naked"
    InlineHint          -> "inlinehint"
    StackAlignment n    -> "stackalign"
-   ReturnsTwice        -> "TODO"
+   ReturnsTwice        -> "returns_twice"
    UWTable             -> "uwtable"
-   NonLazyBind         -> "TODO"
-   Builtin             -> "TODO"
-   NoBuiltin           -> "TODO"
-   Cold                -> "TODO"
+   NonLazyBind         -> "nonlazybind"
+   Builtin             -> "builtin"
+   NoBuiltin           -> "nobuiltin"
+   Cold                -> "cold"
    JumpTable           -> "TODO"
-   NoDuplicate         -> "TODO"
-   SanitizeAddress     -> "TODO"
-   SanitizeThread      -> "TODO"
-   SanitizeMemory      -> "TODO"
-   NoRecurse           -> "TODO"
-   AllocSize _ _       -> "TODO"
-   WriteOnly           -> "TODO"
-   ArgMemOnly          -> "TODO"
-   Convergent          -> "TODO"
-   InaccessibleMemOnly -> "TODO"        
-   SafeStack           -> "TODO"
-   InaccessibleMemOrArgMemOnly  -> "TODO"
+   NoDuplicate         -> "noduplicate"
+   SanitizeAddress     -> "sanitize_address"
+   SanitizeThread      -> "sanitize_thread"
+   SanitizeMemory      -> "sanitize_memory"
    StringAttribute k v -> dquotes (short k) <> "=" <> dquotes (short v)
+
+instance PP ParameterAttribute where
+  pp x = case x of
+    ZeroExt                    -> "zeroext"
+    SignExt                    -> "signext"
+    InReg                      -> "inreg"
+    SRet                       -> "sret"
+    Alignment word             -> "align" <+> pp word
+    NoAlias                    -> "noalias"
+    ByVal                      -> "byval"
+    NoCapture                  -> "nocapture"
+    Nest                       -> "nest"
+    PA.ReadNone                -> "TODO"
+    PA.ReadOnly                -> "TODO"
+    PA.WriteOnly               -> "TODO"
+    InAlloca                   -> "inalloca"
+    NonNull                    -> "nonnull"
+    Dereferenceable word       -> "dereferenceable" <> parens (pp word)
+    DereferenceableOrNull word -> "dereferenceable_or_null" <> parens (pp word)
+    Returned                   -> "returned"
+    SwiftSelf                  -> "swiftself"
+    SwiftError                 -> "swifterror"
+
+instance PP CC.CallingConvention where
+  pp x = case x of
+   CC.Numbered word -> "cc" <+> pp word
+   CC.C             -> "ccc"
+   CC.Fast          -> "fastcc"
+   CC.Cold          -> "coldcc"
+   CC.GHC           -> "cc 10"
+   CC.HiPE          -> "cc 11"
+   CC.WebKit_JS     -> "webkit_jscc"
+   CC.AnyReg        -> "anyregcc"
+   CC.PreserveMost  -> "preserve_mostcc"
+   CC.PreserveAll   -> "preserve_allcc"
+   CC.X86_StdCall   -> "cc 64"
+   CC.X86_FastCall  -> "cc 65"
+   CC.ARM_APCS      -> "cc 66"
+   CC.ARM_AAPCS     -> "cc 67"
+   CC.ARM_AAPCS_VFP -> "cc 68"
+   CC.MSP430_INTR   -> "cc 69"
+   CC.X86_ThisCall  -> "cc 70"
+   CC.PTX_Kernel    -> "cc 71"
+   CC.PTX_Device    -> "cc 72"
+   CC.SPIR_FUNC     -> "cc 75"
+   CC.SPIR_KERNEL   -> "cc 76"
+   CC.Intel_OCL_BI  -> "cc 77"
+   CC.X86_64_SysV   -> "cc 78"
+   CC.X86_64_Win64  -> "cc 79"
 
 instance PP L.Linkage where
     pp = ppLinkage False
@@ -272,6 +332,8 @@ instance PP Instruction where
     Shl {..}    -> "shl"  <+> ppTyped operand0 `cma` pp operand1
     AShr {..}   -> "ashr" <+> ppTyped operand0 `cma` pp operand1
     And {..}    -> "and"  <+> ppTyped operand0 `cma` pp operand1
+    Or {..}     -> "or"   <+> ppTyped operand0 `cma` pp operand1
+    Xor {..}    -> "xor"  <+> ppTyped operand0 `cma` pp operand1
     SDiv {..}   -> "sdiv"  <+> ppTyped operand0 `cma` pp operand1
     UDiv {..}   -> "udiv"  <+> ppTyped operand0 `cma` pp operand1
     SRem {..}   -> "srem"  <+> ppTyped operand0 `cma` pp operand1
@@ -283,13 +345,11 @@ instance PP Instruction where
 
     FCmp {..}   -> "fcmp" <+> pp fpPredicate <+> ppTyped operand0 `cma` pp operand1
 
-    Alloca {..} -> "alloca" <+> pp allocatedType <> num <> align
+    Alloca {..} -> "alloca" <+> pp allocatedType <> num <> ppAlign alignment
       where num   = case numElements of Nothing -> empty
                                         Just o -> "," <+> ppTyped o
-            align | alignment == 0 = empty
-                  | otherwise      = "," <+> pp alignment
-    Store {..}  -> "store" <+> ppTyped value `cma` ppTyped address
-    Load {..}   -> "load" <+> pp argTy `cma` ppTyped address
+    Store {..}  -> "store" <+> ppTyped value `cma` ppTyped address <> ppAlign alignment
+    Load {..}   -> "load" <+> pp argTy `cma` ppTyped address <> ppAlign alignment
       where PointerType argTy _ = typeOf address
     Phi {..}    -> "phi" <+> pp type' <+> commas (fmap phiIncoming incomingValues)
 
@@ -303,6 +363,7 @@ instance PP Instruction where
 
     GetElementPtr {..} -> "getelementptr" <+> bounds inBounds <+> commas (pp argTy : fmap ppTyped (address:indices))
       where PointerType argTy _ = typeOf address
+    ExtractValue {..} -> "extractvalue" <+> commas (ppTyped aggregate : fmap pp indices')
 
     BitCast {..} -> "bitcast" <+> ppTyped operand0 <+> "to" <+> pp type'
     PtrToInt {..} -> "ptrtoint" <+> ppTyped operand0 <+> "to" <+> pp type'
@@ -318,6 +379,13 @@ instance PP CallableOperand where
   pp (Left asm) = error "CallableOperand"
   pp (Right op) = pp op
 
+instance PP [Either GroupID FunctionAttribute] where
+  pp x = hsep $ fmap pp x
+
+instance PP (Either GroupID FunctionAttribute) where
+  pp (Left gid) = pp gid
+  pp (Right fattr) = pp fattr
+
 instance PP Operand where
   pp (LocalReference _ nm) = local (pp nm)
   pp (ConstantOperand con) = pp con
@@ -332,6 +400,7 @@ instance PP C.Constant where
 
   pp (C.Struct _ _ elems) = spacedbraces $ commas $ fmap ppTyped elems
   pp (C.Null {}) = "null"
+  pp (C.Undef {}) = "undef"
 
   pp C.Array {..}
     | memberType == (IntegerType 8) = "c" <> (dquotes $ hcat [ppIntAsChar val | C.Int _ val <- memberValues])
@@ -411,6 +480,9 @@ escape c    = if isAscii c && not (isControl c)
 ppIntAsChar :: Integral a => a -> Doc
 ppIntAsChar = escape . chr . fromIntegral
 
+ppAlign :: Word32 -> Doc
+ppAlign x | x == 0    = empty
+          | otherwise = ", align" <+> pp x
 
 -- print an operand and its type
 ppTyped :: (PP a, Typed a) => a -> Doc
@@ -433,11 +505,12 @@ ppFunctionArgumentTypes _ = error "Non-function argument"
 
 ppCall :: Instruction -> Doc
 ppCall Call { function = Right f,..}
-  = tail <+> "call" <+> pp resultType <+> ftype <+> pp f <> parens (commas $ fmap pp arguments)
+  = tail <+> "call" <+> pp callingConvention <+> pp returnAttributes <+> pp resultType <+> ftype
+    <+> pp f <> parens (commas $ fmap pp arguments) <+> pp functionAttributes
     where
       (functionType@FunctionType {..}) = referencedType (typeOf f)
-      ftype = if isVarArg || isFunctionPtr resultType
-              then ppFunctionArgumentTypes functionType <> "*"
+      ftype = if isVarArg
+              then ppFunctionArgumentTypes functionType
               else empty
       referencedType (PointerType t _) = referencedType t
       referencedType t                 = t

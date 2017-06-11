@@ -4,7 +4,7 @@ define i32 @foo(i1 %x) {
 entry:
   %x.addr = alloca i1
   store i1 %x, i1* %x.addr
-  %0 = load i1* %x.addr
+  %0 = load i1, i1* %x.addr
   br i1 %0, label %if.then, label %if.else
 
 if.then:                                          ; preds = %entry
