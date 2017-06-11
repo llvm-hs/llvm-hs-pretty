@@ -27,6 +27,7 @@ library
   default-language:    Haskell2010
   build-depends:       
     base                 >= 4.6   && < 5.0,
+    bytestring           >= 0.10,
     llvm-hs-pure         >= 4.0,
     text                 >= 0.1,
     wl-pprint-text       >= 1.1

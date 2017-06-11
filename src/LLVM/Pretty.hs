@@ -37,6 +37,7 @@ import Text.Printf
 import Data.Text.Lazy (Text, pack, unpack)
 import Text.PrettyPrint.Leijen.Text
 
+import qualified Data.ByteString.Short as BS
 import Data.Char (chr, ord, isAscii, isControl, isLetter, isDigit)
 import Data.List (intersperse)
 import Data.Maybe (isJust)
@@ -90,6 +91,13 @@ class PP p where
 ppMaybe (Just x) = pp x
 ppMaybe Nothing = empty
 
+-- XXX: horrible hack
+unShort :: BS.ShortByteString -> [Char]
+unShort xs = fmap (toEnum . fromIntegral) $ BS.unpack xs
+
+short :: BS.ShortByteString -> Doc
+short x = string (pack (unShort x))
+
 instance PP Word32 where
   pp x = int (fromIntegral x)
 
@@ -100,11 +108,13 @@ instance PP Integer where
   pp = integer
 
 instance PP Name where
-  pp (Name []) = dquotes empty
-  pp (Name name@(first:_))
+  pp (Name nm)
+   | BS.null nm = dquotes empty
     | isFirst first && all isRest name = text (pack name)
     | otherwise = dquotes . hcat . map escape $ name
     where
+        name = unShort nm
+        first = head name
         isFirst c = isLetter c || c == '-' || c == '_'
         isRest c = isDigit c || isFirst c
   pp (UnName x) = int (fromIntegral x)
@@ -169,7 +179,7 @@ instance PP Definition where
   pp (GlobalDefinition x) = pp x
   pp (TypeDefinition nm ty) = local (pp nm) <+> "=" <+> "type" <+> maybe "opaque" pp ty
   pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap pp attrs))
-  pp (NamedMetadataDefinition nm meta) = text (pack nm)
+  pp (NamedMetadataDefinition nm meta) = short nm
   pp (MetadataNodeDefinition node meta) = pp node
   pp (ModuleInlineAssembly _) = "TODO"
   pp (COMDAT _ _)             = "TODO"
@@ -212,7 +222,7 @@ instance PP FunctionAttribute where
    InaccessibleMemOnly -> "TODO"        
    SafeStack           -> "TODO"
    InaccessibleMemOrArgMemOnly  -> "TODO"
-   StringAttribute k v -> dquotes (text (pack k)) <> "=" <> dquotes (text (pack v))
+   StringAttribute k v -> dquotes (short k) <> "=" <> dquotes (short v)
 
 instance PP L.Linkage where
     pp = ppLinkage False
@@ -345,7 +355,7 @@ instance PP a => PP (Named a) where
 
 instance PP Module where
   pp Module {..} =
-    let header = printf "; ModuleID = '%s'" moduleName in
+    let header = printf "; ModuleID = '%s'" (unShort moduleName) in
     hlinecat (fromString header : (fmap pp moduleDefinitions))
 
 instance PP FP.FloatingPointPredicate where
