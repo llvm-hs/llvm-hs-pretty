@@ -121,12 +121,12 @@ instance PP (Operand, [ParameterAttribute]) where
 
 instance PP Type where
   pp (IntegerType width) = "i" <> pp width
-  pp (FloatingPointType 16    IEEE) = "half"
-  pp (FloatingPointType 32    IEEE) = "float"
-  pp (FloatingPointType 64    IEEE) = "double"
-  pp (FloatingPointType width IEEE) = "fp" <> pp width
-  pp (FloatingPointType width DoubleExtended) = "x86_fp" <> pp width
-  pp (FloatingPointType width PairOfFloats)   = "ppc_fp" <> pp width
+  pp (FloatingPointType HalfFP)      = "half"
+  pp (FloatingPointType FloatFP )    = "float"
+  pp (FloatingPointType DoubleFP)    = "double"
+  pp (FloatingPointType FP128FP)     = "fp128"
+  pp (FloatingPointType X86_FP80FP)  = "x86_fp80"
+  pp (FloatingPointType PPC_FP128FP) = "ppc_f128p"
 
   pp VoidType = "void"
   pp (PointerType ref addr) = pp ref <> "*"

@@ -87,12 +87,12 @@ getElementPtrType ty cons = ptr i8 -- XXX
 extractValueType = error "extract"
 
 instance Typed F.SomeFloat where
-    typeOf (F.Half _)          = FloatingPointType 16  IEEE
-    typeOf (F.Single _)        = FloatingPointType 32  IEEE
-    typeOf (F.Double _)        = FloatingPointType 64  IEEE
-    typeOf (F.Quadruple _ _)   = FloatingPointType 128 IEEE
-    typeOf (F.X86_FP80 _ _)    = FloatingPointType 80  DoubleExtended
-    typeOf (F.PPC_FP128 _ _)   = FloatingPointType 128 PairOfFloats
+    typeOf (F.Half _)          = FloatingPointType HalfFP 
+    typeOf (F.Single _)        = FloatingPointType FloatFP
+    typeOf (F.Double _)        = FloatingPointType DoubleFP
+    typeOf (F.Quadruple _ _)   = FloatingPointType FP128FP
+    typeOf (F.X86_FP80 _ _)    = FloatingPointType X86_FP80FP
+    typeOf (F.PPC_FP128 _ _)   = FloatingPointType PPC_FP128FP
 
 instance Typed Global where
     typeOf (GlobalVariable {..}) = type'
