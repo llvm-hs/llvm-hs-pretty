@@ -179,7 +179,7 @@ instance PP Global where
     where
       align | alignment == 0    = empty
             | otherwise = "align" <+> pp alignment
-      gcName = maybe empty (\n -> "gc" <+> dquotes (text $ pack n)) garbageCollectorName
+      gcName = maybe empty (\n -> "gc" <+> dquotes (text $ pack n)) (fmap unShort garbageCollectorName)
 
   pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> ppMaybe unnamedAddr
                              <+> kind <+> pp type' <+> ppMaybe initializer <> ppAlign alignment
