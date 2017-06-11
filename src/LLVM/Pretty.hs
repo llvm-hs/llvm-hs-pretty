@@ -1,9 +1,11 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 
 module LLVM.Pretty (
   ppllvm,
@@ -36,6 +38,7 @@ import Text.Printf
 import Data.Text.Lazy (Text, pack, unpack)
 import Text.PrettyPrint.Leijen.Text
 
+import qualified Data.ByteString.Short as BS
 import Data.Char (chr, ord, isAscii, isControl, isLetter, isDigit)
 import Data.List (intersperse)
 import Data.Maybe (isJust)
@@ -86,6 +89,13 @@ class PP p where
 ppMaybe (Just x) = pp x
 ppMaybe Nothing = empty
 
+-- XXX: horrible hack
+unShort :: BS.ShortByteString -> [Char]
+unShort xs = fmap (toEnum . fromIntegral) $ BS.unpack xs
+
+short :: BS.ShortByteString -> Doc
+short x = string (pack (unShort x))
+
 instance PP Word32 where
   pp x = int (fromIntegral x)
 
@@ -96,11 +106,13 @@ instance PP Integer where
   pp = integer
 
 instance PP Name where
-  pp (Name []) = dquotes empty
-  pp (Name name@(first:_))
+  pp (Name nm)
+   | BS.null nm = dquotes empty
     | isFirst first && all isRest name = text (pack name)
     | otherwise = dquotes . hcat . map escape $ name
     where
+        name = unShort nm
+        first = head name
         isFirst c = isLetter c || c == '-' || c == '_'
         isRest c = isDigit c || isFirst c
   pp (UnName x) = int (fromIntegral x)
@@ -114,6 +126,7 @@ instance PP [ParameterAttribute] where
 
 instance PP ([Parameter], Bool) where
   pp (params, False) = commas (fmap pp params)
+  pp (params, True) = "TODO"
 
 instance PP (Operand, [ParameterAttribute]) where
   pp (op, attrs) = pp (typeOf op) <+> pp attrs <+> pp op
@@ -124,12 +137,12 @@ instance PP UnnamedAddr where
 
 instance PP Type where
   pp (IntegerType width) = "i" <> pp width
-  pp (FloatingPointType 16    IEEE) = "half"
-  pp (FloatingPointType 32    IEEE) = "float"
-  pp (FloatingPointType 64    IEEE) = "double"
-  pp (FloatingPointType width IEEE) = "fp" <> pp width
-  pp (FloatingPointType width DoubleExtended) = "x86_fp" <> pp width
-  pp (FloatingPointType width PairOfFloats)   = "ppc_fp" <> pp width
+  pp (FloatingPointType HalfFP)      = "half"
+  pp (FloatingPointType FloatFP )    = "float"
+  pp (FloatingPointType DoubleFP)    = "double"
+  pp (FloatingPointType FP128FP)     = "fp128"
+  pp (FloatingPointType X86_FP80FP)  = "x86_fp80"
+  pp (FloatingPointType PPC_FP128FP) = "ppc_f128p"
 
   pp VoidType = "void"
   pp (PointerType ref addr) = pp ref <> "*"
@@ -140,6 +153,8 @@ instance PP Type where
                                else  "{" <> (commas $ fmap pp elementTypes ) <> "}"
   pp (ArrayType {..}) = brackets $ pp nArrayElements <+> "x" <+> pp elementType
   pp (NamedTypeReference name) = "%" <> pp name
+  pp (MetadataType) = "metadata"
+  pp (TokenType) = "TODO"
 
 instance PP Global where
   pp (Function {..}) =
@@ -181,11 +196,13 @@ instance PP Definition where
   pp (GlobalDefinition x) = pp x
   pp (TypeDefinition nm ty) = local (pp nm) <+> "=" <+> "type" <+> maybe "opaque" pp ty
   pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap pp attrs))
-  pp (NamedMetadataDefinition nm meta) = text (pack nm)
+  pp (NamedMetadataDefinition nm meta) = short nm
   pp (MetadataNodeDefinition node meta) = pp node
+  pp (ModuleInlineAssembly _) = "TODO"
+  pp (COMDAT _ _)             = "TODO"
 
 instance PP FunctionAttribute where
-  pp x = case x of
+  pp = \case
    NoReturn            -> "noreturn"
    NoUnwind            -> "nounwind"
    FA.ReadNone         -> "readnone"
@@ -216,7 +233,7 @@ instance PP FunctionAttribute where
    SanitizeAddress     -> "sanitize_address"
    SanitizeThread      -> "sanitize_thread"
    SanitizeMemory      -> "sanitize_memory"
-   StringAttribute k v -> dquotes (text (pack k)) <> "=" <> dquotes (text (pack v))
+   StringAttribute k v -> dquotes (short k) <> "=" <> dquotes (short v)
 
 instance PP ParameterAttribute where
   pp x = case x of
@@ -276,6 +293,13 @@ ppLinkage omitExternal x = case x of
    L.Private                 -> "private"
    L.Internal                -> "internal"
    L.ExternWeak              -> "extern_weak"
+   L.AvailableExternally     -> "TODO"
+   L.LinkOnce                -> "TODO"
+   L.Weak                    -> "TODO"
+   L.Common                  -> "TODO"
+   L.Appending               -> "TODO"
+   L.LinkOnceODR             -> "TODO"
+   L.WeakODR                 -> "TODO"
 
 instance PP MetadataNodeID where
   pp (MetadataNodeID x) = "#" <> int (fromIntegral x)
@@ -365,6 +389,7 @@ instance PP (Either GroupID FunctionAttribute) where
 instance PP Operand where
   pp (LocalReference _ nm) = local (pp nm)
   pp (ConstantOperand con) = pp con
+  pp (MetadataOperand con) = "TODO"
 
 
 instance PP C.Constant where
@@ -399,7 +424,7 @@ instance PP a => PP (Named a) where
 
 instance PP Module where
   pp Module {..} =
-    let header = printf "; ModuleID = '%s'" moduleName in
+    let header = printf "; ModuleID = '%s'" (unShort moduleName) in
     hlinecat (fromString header : (fmap pp moduleDefinitions))
 
 instance PP FP.FloatingPointPredicate where
@@ -476,6 +501,7 @@ ppParams ppParam (ps, varrg) = parens . commas $ fmap ppParam ps ++ vargs
 
 ppFunctionArgumentTypes :: Type -> Doc
 ppFunctionArgumentTypes FunctionType {..} = ppParams pp (argumentTypes, isVarArg)
+ppFunctionArgumentTypes _ = error "Non-function argument"
 
 ppCall :: Instruction -> Doc
 ppCall Call { function = Right f,..}
