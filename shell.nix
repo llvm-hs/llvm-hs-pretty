@@ -11,43 +11,44 @@ in
 
 let
 
+  orig_pkgs = import nixpkgs {};
+
+  llvm-hs-repo = orig_pkgs.fetchFromGitHub {
+    owner = "llvm-hs";
+    repo = "llvm-hs";
+    rev = "76cd4d5107862401a7ebbe1bb9cc1cf172fa1d66";
+    sha256 = "0bnh0yyjflhvc8vjrqsa25k7issnvkvgx149bnq7avka5mx2m99m";
+  };
+
   hsOverlay = self: super: {
     haskellPackages = super.haskellPackages.override {
       overrides = self': super': {
-        llvm-hs-pure = super'.callPackage ./llvm-hs-pure {};
-        llvm-hs = super'.callPackage ./llvm-hs {
+        llvm-hs-pure = super'.callPackage (import "${llvm-hs-repo}/llvm-hs-pure") {};
+        llvm-hs = super'.callPackage (import "${llvm-hs-repo}/llvm-hs") {
           llvm-config = self.llvm_4;
         };
+        llvm-hs-pretty = super'.callPackage ./. {};
       };
     };
   };
 
-  orig_pkgs = import nixpkgs {};
   pkgs = import orig_pkgs.path { overlays = [ hsOverlay ]; };
 
   env =
     let
-      # Check that a package is not part of llvm-hs.
-      notLlvmHs = p:
-        p.pname or "" != "llvm-hs-pure" && p.pname or "" != "llvm-hs"
-      ;
       # Determine if a package is a Haskell package or not.  Stolen from:
       # <nixpkgs/pkgs/development/haskell-modules/generic-builder.nix>
       isHaskellPkg = x: (x ? pname) && (x ? version) && (x ? env);
       isSystemPkg = x: !isHaskellPkg x;
 
       allDependencies =
-        let inherit (pkgs.haskellPackages) llvm-hs-pure llvm-hs; in
+        let inherit (pkgs.haskellPackages) llvm-hs-pretty; in
         builtins.concatLists [
-          llvm-hs-pure.nativeBuildInputs
-          llvm-hs-pure.propagatedNativeBuildInputs
-          llvm-hs.nativeBuildInputs
-          llvm-hs.propagatedNativeBuildInputs
+          llvm-hs-pretty.nativeBuildInputs
+          llvm-hs-pretty.propagatedNativeBuildInputs
         ]
       ;
-      haskellDependencies = builtins.filter (x: isHaskellPkg x && notLlvmHs x)
-        allDependencies
-      ;
+      haskellDependencies = builtins.filter isHaskellPkg allDependencies;
       systemDependencies = builtins.filter isSystemPkg allDependencies;
 
       ghc = pkgs.haskellPackages.ghcWithPackages
