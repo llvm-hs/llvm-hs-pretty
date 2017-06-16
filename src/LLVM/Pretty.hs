@@ -39,10 +39,11 @@ import Data.Text.Lazy.Encoding
 import Data.Text.Lazy (Text, pack, unpack)
 import qualified Data.ByteString.Short as SBF
 import qualified Data.ByteString.Lazy.Char8 as BF
-import Data.ByteString.Lazy(fromStrict)
-import Data.ByteString.Internal(w2c)
+import Data.ByteString.Lazy (fromStrict)
+import Data.ByteString.Internal (w2c)
 import Text.PrettyPrint.Leijen.Text
 
+import qualified Data.ByteString.Char8 as BL
 import qualified Data.ByteString.Short as BS
 import Data.Char (chr, ord, isAscii, isControl, isLetter, isDigit)
 import Data.List (intersperse)
@@ -162,7 +163,7 @@ instance PP Type where
   pp (ArrayType {..}) = brackets $ pp nArrayElements <+> "x" <+> pp elementType
   pp (NamedTypeReference name) = "%" <> pp name
   pp (MetadataType) = "metadata"
-  pp (TokenType) = "TODO"
+  pp (TokenType) = "token"
 
 instance PP Global where
   pp (Function {..}) =
@@ -206,8 +207,8 @@ instance PP Definition where
   pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap pp attrs))
   pp (NamedMetadataDefinition nm meta) = short nm
   pp (MetadataNodeDefinition node meta) = pp node
-  pp (ModuleInlineAssembly _) = "TODO"
-  pp (COMDAT _ _)             = "TODO"
+  pp (ModuleInlineAssembly asm) = "module asm" <+> dquotes (text (pack (BL.unpack asm)))
+  pp (COMDAT _ _)             = "TODO" -- XXX: I've never used this, no idea.
 
 instance PP FunctionAttribute where
   pp = \case
@@ -437,11 +438,53 @@ instance PP C.Constant where
   pp (C.Int width val) = pp val
   pp (C.Float (F.Double val)) = text $ pack $ printf "%6.6e" val
   pp (C.Float (F.Single val)) = text $ pack $ printf "%6.6e" val
+  pp (C.Float (F.Half val)) = text $ pack $ printf "%6.6e" val
+  pp (C.Float (F.Quadruple val _)) = text $ pack $ printf "%6.6e" val
+  pp (C.Float (F.X86_FP80 val _)) = text $ pack $ printf "%6.6e" val
+  pp (C.Float (F.PPC_FP128 val _)) = text $ pack $ printf "%6.6e" val
+
   pp (C.GlobalReference ty nm) = "@" <> pp nm
+  pp (C.Vector args) = "<" <+> commas (fmap pp args) <+> ">"
+
+  pp (C.Add {..})    = "add"  <+> ppTyped operand0 `cma` pp operand1
+  pp (C.Sub {..})    = "sub"  <+> ppTyped operand0 `cma` pp operand1
+  pp (C.Mul {..})    = "mul"  <+> ppTyped operand0 `cma` pp operand1
+  pp (C.Shl {..})    = "shl"  <+> ppTyped operand0 `cma` pp operand1
+  pp (C.AShr {..})   = "ashr" <+> ppTyped operand0 `cma` pp operand1
+  pp (C.LShr {..})   = "lshr" <+> ppTyped operand0 `cma` pp operand1
+  pp (C.And {..})    = "and"  <+> ppTyped operand0 `cma` pp operand1
+  pp (C.Or {..})     = "or"   <+> ppTyped operand0 `cma` pp operand1
+  pp (C.Xor {..})    = "xor"  <+> ppTyped operand0 `cma` pp operand1
+  pp (C.SDiv {..})   = "sdiv"  <+> ppTyped operand0 `cma` pp operand1
+  pp (C.UDiv {..})   = "udiv"  <+> ppTyped operand0 `cma` pp operand1
+  pp (C.SRem {..})   = "srem"  <+> ppTyped operand0 `cma` pp operand1
+  pp (C.URem {..})   = "urem"  <+> ppTyped operand0 `cma` pp operand1
+
+  pp (C.FAdd {..})   = "fadd" <+> ppTyped operand0 `cma` pp operand1
+  pp (C.FSub {..})   = "fsub" <+> ppTyped operand0 `cma` pp operand1
+  pp (C.FMul {..})   = "fmul" <+> ppTyped operand0 `cma` pp operand1
+  pp (C.FDiv {..})   = "fdiv" <+> ppTyped operand0 `cma` pp operand1
+  pp (C.FRem {..})   = "frem" <+> ppTyped operand0 `cma` pp operand1
+  pp (C.FCmp {..})   = "fcmp" <+> pp fpPredicate <+> ppTyped operand0 `cma` pp operand1
+  pp C.ICmp {..}     = "icmp" <+> pp iPredicate <+> ppTyped operand0 `cma` pp operand1
+
+  pp (C.Select {..})  = "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
+  pp (C.SExt {..})    = "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
+  pp (C.ZExt {..})    = "zext" <+> ppTyped operand0 <+> "to" <+> pp type'
+  pp (C.FPExt {..})   = "fpext" <+> ppTyped operand0 <+> "to" <+> pp type'
+  pp (C.Trunc {..})   = "trunc" <+> ppTyped operand0 <+> "to" <+> pp type'
+  pp (C.FPTrunc {..}) = "fptrunc" <+> ppTyped operand0 <+> "to" <+> pp type'
+
+  pp C.FPToUI {..} = "fptoui" <+> ppTyped operand0 <+> "to" <+> pp type'
+  pp C.FPToSI {..} = "fptosi" <+> ppTyped operand0 <+> "to" <+> pp type'
+  pp C.UIToFP {..} = "uitofp" <+> ppTyped operand0 <+> "to" <+> pp type'
+  pp C.SIToFP {..} = "sitofp" <+> ppTyped operand0 <+> "to" <+> pp type'
 
   pp (C.Struct _ _ elems) = spacedbraces $ commas $ fmap ppTyped elems
   pp (C.Null {}) = "null"
   pp (C.Undef {}) = "undef"
+  pp (C.TokenNone {}) = "none"
+  pp (C.BlockAddress fn blk) = "blockaddress" <> parens (commas (fmap pp [fn, blk]))
 
   pp C.Array {..}
     | memberType == (IntegerType 8) = "c" <> (dquotes $ hcat [ppIntAsChar val | C.Int _ val <- memberValues])
@@ -456,7 +499,6 @@ instance PP C.Constant where
   pp C.BitCast {..} = "bitcast" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
   pp C.PtrToInt {..} = "ptrtoint" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
   pp C.IntToPtr {..} = "inttoptr" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
-  {-pp x = error (show x)-}
 
 instance PP a => PP (Named a) where
   pp (nm := a) = "%" <> pp nm <+> "=" <+> pp a
@@ -541,7 +583,7 @@ ppParams ppParam (ps, varrg) = parens . commas $ fmap ppParam ps ++ vargs
 
 ppFunctionArgumentTypes :: Type -> Doc
 ppFunctionArgumentTypes FunctionType {..} = ppParams pp (argumentTypes, isVarArg)
-ppFunctionArgumentTypes _ = error "Non-function argument. (Malfomred AST)"
+ppFunctionArgumentTypes _ = error "Non-function argument. (Malformed AST)"
 
 ppCall :: Instruction -> Doc
 ppCall Call { function = Right f,..}
@@ -559,7 +601,7 @@ ppCall Call { function = Right f,..}
         Just Tail -> "tail"
         Just MustTail -> "musttail"
         Nothing -> empty
-ppCall x = error "Non-callable argument. (Malfomred AST)"
+ppCall x = error "Non-callable argument. (Malformed AST)"
 
 ppSingleBlock :: BasicBlock -> Doc
 ppSingleBlock (BasicBlock nm instrs term) = (vcat $ (fmap pp instrs) ++ [pp term])
