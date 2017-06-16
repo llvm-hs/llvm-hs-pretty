@@ -9,6 +9,7 @@
 
 module LLVM.Pretty (
   ppllvm,
+  ppll,
 ) where
 
 import Prelude hiding ((<$>))
@@ -135,7 +136,7 @@ instance PP [ParameterAttribute] where
 
 instance PP ([Parameter], Bool) where
   pp (params, False) = commas (fmap pp params)
-  pp (params, True) = "TODO"
+  pp (params, True) = "TODO" -- XXX: variadic case
 
 instance PP (Operand, [ParameterAttribute]) where
   pp (op, attrs) = pp (typeOf op) <+> pp attrs <+> pp op
@@ -262,9 +263,9 @@ instance PP ParameterAttribute where
     ByVal                      -> "byval"
     NoCapture                  -> "nocapture"
     Nest                       -> "nest"
-    PA.ReadNone                -> "TODO"
-    PA.ReadOnly                -> "TODO"
-    PA.WriteOnly               -> "TODO"
+    PA.ReadNone                -> "readnone"
+    PA.ReadOnly                -> "readonly"
+    PA.WriteOnly               -> "writeonly"
     InAlloca                   -> "inalloca"
     NonNull                    -> "nonnull"
     Dereferenceable word       -> "dereferenceable" <> parens (pp word)
@@ -303,19 +304,20 @@ instance PP CC.CallingConvention where
 instance PP L.Linkage where
     pp = ppLinkage False
 
+ppLinkage :: Bool -> L.Linkage -> Doc
 ppLinkage omitExternal x = case x of
    L.External | omitExternal -> empty
               | otherwise    -> "external"
    L.Private                 -> "private"
    L.Internal                -> "internal"
    L.ExternWeak              -> "extern_weak"
-   L.AvailableExternally     -> "TODO"
-   L.LinkOnce                -> "TODO"
-   L.Weak                    -> "TODO"
-   L.Common                  -> "TODO"
-   L.Appending               -> "TODO"
-   L.LinkOnceODR             -> "TODO"
-   L.WeakODR                 -> "TODO"
+   L.AvailableExternally     -> "available_externally"
+   L.LinkOnce                -> "linkonce"
+   L.Weak                    -> "weak"
+   L.Common                  -> "common"
+   L.Appending               -> "appending"
+   L.LinkOnceODR             -> "linkonce_odr"
+   L.WeakODR                 -> "weak_odr"
 
 instance PP MetadataNodeID where
   pp (MetadataNodeID x) = "#" <> int (fromIntegral x)
@@ -431,16 +433,24 @@ instance PP (Either GroupID FunctionAttribute) where
 instance PP Operand where
   pp (LocalReference _ nm) = local (pp nm)
   pp (ConstantOperand con) = pp con
-  pp (MetadataOperand con) = "TODO"
+  pp (MetadataOperand mdata) = pp mdata
 
+instance PP Metadata where
+  pp (MDString str) = text (decodeShortUtf8 str)
+  pp (MDNode node) = pp node
+  pp (MDValue operand) = pp operand
+
+instance PP MetadataNode where
+  pp (MetadataNode xs) = error "TODO"
+  pp (MetadataNodeReference _) = error "TODO"
 
 instance PP C.Constant where
   pp (C.Int width val) = pp val
-  pp (C.Float (F.Double val)) = text $ pack $ printf "%6.6e" val
-  pp (C.Float (F.Single val)) = text $ pack $ printf "%6.6e" val
-  pp (C.Float (F.Half val)) = text $ pack $ printf "%6.6e" val
+  pp (C.Float (F.Double val))      = text $ pack $ printf "%6.6e" val
+  pp (C.Float (F.Single val))      = text $ pack $ printf "%6.6e" val
+  pp (C.Float (F.Half val))        = text $ pack $ printf "%6.6e" val
   pp (C.Float (F.Quadruple val _)) = text $ pack $ printf "%6.6e" val
-  pp (C.Float (F.X86_FP80 val _)) = text $ pack $ printf "%6.6e" val
+  pp (C.Float (F.X86_FP80 val _))  = text $ pack $ printf "%6.6e" val
   pp (C.Float (F.PPC_FP128 val _)) = text $ pack $ printf "%6.6e" val
 
   pp (C.GlobalReference ty nm) = "@" <> pp nm
@@ -608,3 +618,6 @@ ppSingleBlock (BasicBlock nm instrs term) = (vcat $ (fmap pp instrs) ++ [pp term
 
 ppllvm :: Module -> Text
 ppllvm = displayT . renderPretty 0.4 100 . pp
+
+ppll :: PP a => a -> Text
+ppll = displayT . renderPretty 0.4 100 . pp
