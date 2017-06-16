@@ -2,6 +2,7 @@
 
 module LLVM.Typed (
   Typed(..),
+  getElementType,
 ) where
 
 import LLVM.AST
@@ -38,6 +39,8 @@ instance Typed C.Constant where
     typeOf (C.GlobalReference t _) = t
     typeOf (C.Add {..})     = typeOf operand0
     typeOf (C.FAdd {..})    = typeOf operand0
+    typeOf (C.FDiv {..})    = typeOf operand0
+    typeOf (C.FRem {..})    = typeOf operand0
     typeOf (C.Sub {..})     = typeOf operand0
     typeOf (C.FSub {..})    = typeOf operand0
     typeOf (C.Mul {..})     = typeOf operand0
@@ -62,8 +65,9 @@ instance Typed C.Constant where
     typeOf (C.SIToFP {..})  = type'
     typeOf (C.FPTrunc {..}) = type'
     typeOf (C.FPExt {..})   = type'
-    typeOf (C.PtrToInt {..})    = type'
-    typeOf (C.BitCast {..})     = type'
+    typeOf (C.PtrToInt {..}) = type'
+    typeOf (C.IntToPtr {..}) = type'
+    typeOf (C.BitCast {..})  = type'
     typeOf (C.ICmp {..})    = case (typeOf operand0) of
                                 (VectorType n _) -> VectorType n i1
                                 _ -> i1
@@ -80,9 +84,15 @@ instance Typed C.Constant where
                                         _ -> VoidType {- error -}
     typeOf (C.ExtractValue {..})    = extractValueType (typeOf aggregate) indices
     typeOf (C.InsertValue {..})     = typeOf aggregate
+    typeOf (C.TokenNone)          = error "TODO"
+    typeOf (C.AddrSpaceCast {..}) = error "TODO"
 
 getElementPtrType :: Type -> [C.Constant] -> Type
 getElementPtrType ty cons = ptr i8 -- XXX
+
+getElementType :: Type -> Type
+getElementType (PointerType t _) = t
+getElementType t = error $ "this should be a pointer type" ++ show t
 
 extractValueType = error "extract"
 

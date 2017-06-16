@@ -35,7 +35,12 @@ import LLVM.AST.FunctionAttribute as FA
 import Data.String
 
 import Text.Printf
+import Data.Text.Lazy.Encoding
 import Data.Text.Lazy (Text, pack, unpack)
+import qualified Data.ByteString.Short as SBF
+import qualified Data.ByteString.Lazy.Char8 as BF
+import Data.ByteString.Lazy(fromStrict)
+import Data.ByteString.Internal(w2c)
 import Text.PrettyPrint.Leijen.Text
 
 import qualified Data.ByteString.Short as BS
@@ -95,6 +100,9 @@ unShort xs = fmap (toEnum . fromIntegral) $ BS.unpack xs
 
 short :: BS.ShortByteString -> Doc
 short x = string (pack (unShort x))
+
+decodeShortUtf8 :: SBF.ShortByteString -> Text
+decodeShortUtf8 = decodeUtf8 . fromStrict . SBF.fromShort
 
 instance PP Word32 where
   pp x = int (fromIntegral x)
@@ -190,7 +198,7 @@ instance PP Global where
 
   pp (GlobalAlias {..}) = global (pp name) <+> "=" <+> pp linkage <+> ppMaybe unnamedAddr <+> "alias" <+> pp typ `cma` ppTyped aliasee
     where
-      PointerType typ _ = type'
+      typ = getElementType type'
 
 instance PP Definition where
   pp (GlobalDefinition x) = pp x
@@ -228,11 +236,18 @@ instance PP FunctionAttribute where
    Builtin             -> "builtin"
    NoBuiltin           -> "nobuiltin"
    Cold                -> "cold"
-   JumpTable           -> "TODO"
+   JumpTable           -> "jumptable"
    NoDuplicate         -> "noduplicate"
    SanitizeAddress     -> "sanitize_address"
    SanitizeThread      -> "sanitize_thread"
    SanitizeMemory      -> "sanitize_memory"
+   NoRecurse           -> "norecurse"
+   Convergent          -> "convergent"
+   ArgMemOnly          -> "argmemonly"
+   InaccessibleMemOnly -> "inaccessiblememonly"
+   AllocSize a Nothing -> "allocsize" <> parens (pp a)
+   AllocSize a (Just b) -> "allocsize" <> parens (commas [pp a, pp b])
+   InaccessibleMemOrArgMemOnly -> "inaccessiblemem_or_argmemonly"
    StringAttribute k v -> dquotes (short k) <> "=" <> dquotes (short v)
 
 instance PP ParameterAttribute where
@@ -362,7 +377,7 @@ instance PP Instruction where
     Trunc {..}  -> "trunc" <+> ppTyped operand0 <+> "to" <+> pp type'
 
     GetElementPtr {..} -> "getelementptr" <+> bounds inBounds <+> commas (pp argTy : fmap ppTyped (address:indices))
-      where PointerType argTy _ = typeOf address
+      where argTy = getElementType $ typeOf address
     ExtractValue {..} -> "extractvalue" <+> commas (ppTyped aggregate : fmap pp indices')
 
     BitCast {..} -> "bitcast" <+> ppTyped operand0 <+> "to" <+> pp type'
