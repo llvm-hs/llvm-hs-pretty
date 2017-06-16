@@ -336,8 +336,13 @@ instance PP Terminator where
   pp (Switch {..}) = "switch" <+> ppTyped operand0'
                    `cma` label (pp defaultDest)
                    <+> brackets (hsep [ ppTyped v `cma` label (pp l) | (v,l) <- dests ])
-
-  pp x = error (show x)
+  pp (Unreachable _) = "unreachable"
+  pp (IndirectBr {..}) = error "Not Implemented"
+  pp (Invoke {..}) = error "Not Implemented"
+  pp (Resume {..}) = error "Not Implemented"
+  pp (CleanupRet {..}) = error "Not Implemented"
+  pp (CatchRet {..}) = error "Not Implemented"
+  pp (CatchSwitch {..}) = error "Not Implemented"
 
 instance PP Instruction where
   pp x = case x of
@@ -346,6 +351,7 @@ instance PP Instruction where
     Mul {..}    -> "mul"  <+> ppTyped operand0 `cma` pp operand1
     Shl {..}    -> "shl"  <+> ppTyped operand0 `cma` pp operand1
     AShr {..}   -> "ashr" <+> ppTyped operand0 `cma` pp operand1
+    LShr {..}   -> "lshr" <+> ppTyped operand0 `cma` pp operand1
     And {..}    -> "and"  <+> ppTyped operand0 `cma` pp operand1
     Or {..}     -> "or"   <+> ppTyped operand0 `cma` pp operand1
     Xor {..}    -> "xor"  <+> ppTyped operand0 `cma` pp operand1
@@ -357,7 +363,8 @@ instance PP Instruction where
     FAdd {..}   -> "fadd" <+> ppTyped operand0 `cma` pp operand1
     FSub {..}   -> "fsub" <+> ppTyped operand0 `cma` pp operand1
     FMul {..}   -> "fmul" <+> ppTyped operand0 `cma` pp operand1
-
+    FDiv {..}   -> "fdiv" <+> ppTyped operand0 `cma` pp operand1
+    FRem {..}   -> "frem" <+> ppTyped operand0 `cma` pp operand1
     FCmp {..}   -> "fcmp" <+> pp fpPredicate <+> ppTyped operand0 `cma` pp operand1
 
     Alloca {..} -> "alloca" <+> pp allocatedType <> num <> ppAlign alignment
@@ -374,17 +381,36 @@ instance PP Instruction where
     Select {..} -> "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
     SExt {..}   -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
     ZExt {..}   -> "zext" <+> ppTyped operand0 <+> "to" <+> pp type'
+    FPExt {..}   -> "fpext" <+> ppTyped operand0 <+> "to" <+> pp type'
     Trunc {..}  -> "trunc" <+> ppTyped operand0 <+> "to" <+> pp type'
+    FPTrunc {..}  -> "fptrunc" <+> ppTyped operand0 <+> "to" <+> pp type'
 
     GetElementPtr {..} -> "getelementptr" <+> bounds inBounds <+> commas (pp argTy : fmap ppTyped (address:indices))
       where argTy = getElementType $ typeOf address
     ExtractValue {..} -> "extractvalue" <+> commas (ppTyped aggregate : fmap pp indices')
 
     BitCast {..} -> "bitcast" <+> ppTyped operand0 <+> "to" <+> pp type'
+    FPToUI {..} -> "fptoui" <+> ppTyped operand0 <+> "to" <+> pp type'
+    FPToSI {..} -> "fptosi" <+> ppTyped operand0 <+> "to" <+> pp type'
+    UIToFP {..} -> "uitofp" <+> ppTyped operand0 <+> "to" <+> pp type'
+    SIToFP {..} -> "sitofp" <+> ppTyped operand0 <+> "to" <+> pp type'
     PtrToInt {..} -> "ptrtoint" <+> ppTyped operand0 <+> "to" <+> pp type'
     IntToPtr {..} -> "inttoptr" <+> ppTyped operand0 <+> "to" <+> pp type'
 
-    x -> error (show x)
+    InsertElement {..} -> error "Not implemeneted"
+    ShuffleVector {..} -> error "Not implemeneted"
+    ExtractElement {..} -> error "Not implemeneted"
+    InsertValue {..} -> error "Not implemeneted"
+
+    Fence {..} -> error "Not implemeneted"
+    AtomicRMW {..} -> error "Not implemeneted"
+    CmpXchg {..} -> error "Not implemeneted"
+    AddrSpaceCast {..} -> error "Not implemeneted"
+    VAArg {..} -> error "Not implemeneted"
+
+    LandingPad {..} -> error "Not implemeneted"
+    CatchPad {..} -> error "Not implemeneted"
+    CleanupPad {..} -> error "Not implemeneted"
 
     where
       bounds True = "inbounds"
@@ -430,8 +456,7 @@ instance PP C.Constant where
   pp C.BitCast {..} = "bitcast" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
   pp C.PtrToInt {..} = "ptrtoint" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
   pp C.IntToPtr {..} = "inttoptr" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
-
-  pp x = error (show x)
+  {-pp x = error (show x)-}
 
 instance PP a => PP (Named a) where
   pp (nm := a) = "%" <> pp nm <+> "=" <+> pp a
@@ -516,7 +541,7 @@ ppParams ppParam (ps, varrg) = parens . commas $ fmap ppParam ps ++ vargs
 
 ppFunctionArgumentTypes :: Type -> Doc
 ppFunctionArgumentTypes FunctionType {..} = ppParams pp (argumentTypes, isVarArg)
-ppFunctionArgumentTypes _ = error "Non-function argument"
+ppFunctionArgumentTypes _ = error "Non-function argument. (Malfomred AST)"
 
 ppCall :: Instruction -> Doc
 ppCall Call { function = Right f,..}
@@ -534,8 +559,7 @@ ppCall Call { function = Right f,..}
         Just Tail -> "tail"
         Just MustTail -> "musttail"
         Nothing -> empty
-
-ppCall x = error (show x)
+ppCall x = error "Non-callable argument. (Malfomred AST)"
 
 ppSingleBlock :: BasicBlock -> Doc
 ppSingleBlock (BasicBlock nm instrs term) = (vcat $ (fmap pp instrs) ++ [pp term])

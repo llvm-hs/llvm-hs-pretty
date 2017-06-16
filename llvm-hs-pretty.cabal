@@ -49,6 +49,7 @@ Test-suite test
     pretty-show          >= 1.6 && < 1.7,
     tasty                >= 0.11,
     tasty-hspec          >= 1.1,
+    tasty-golden         >= 1.1,
     llvm-hs-pretty       >= 0.1,
     llvm-hs              >= 4.0,
     llvm-hs-pure         >= 4.0
