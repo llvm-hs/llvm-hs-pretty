@@ -403,7 +403,7 @@ instance PP Instruction where
     InsertElement {..} -> error "Not implemeneted"
     ShuffleVector {..} -> error "Not implemeneted"
     ExtractElement {..} -> error "Not implemeneted"
-    InsertValue {..} -> error "Not implemeneted"
+    InsertValue {..} -> "insertvalue" <+> commas (ppTyped aggregate : ppTyped element : fmap pp indices')
 
     Fence {..} -> error "Not implemeneted"
     AtomicRMW {..} -> error "Not implemeneted"
