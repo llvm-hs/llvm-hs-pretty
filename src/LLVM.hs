@@ -1,5 +1,5 @@
 module LLVM (
-  module LLVM.Typed
+  module LLVM.Typed,
   module LLVM.Pretty
 ) where
 
