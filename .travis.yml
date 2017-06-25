@@ -49,3 +49,4 @@ install:
 script:
   - git --version
   - stack --version
+  - stack --no-terminal --skip-ghc-check test

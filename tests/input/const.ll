@@ -37,12 +37,12 @@
 
 ; Hexadecimal floating-point literal.
 @g27 = global double 0x0000000000000000
-@g28 = global x86_fp80 0xK00000000000000000000
+;@g28 = global x86_fp80 0xK00000000000000000000
 ; TODO: add test case for 0xL floating-point constant.
 ;@g29 = global fp128 0xL00000000000000000000000000000000
 ; TODO: add test case for 0xM floating-point constant.
 ;@g30 = global ppc_fp128 0xM00000000000000000000000000000000
-@g31 = global half 0xH0000
+;@g31 = global half 0xH0000
 
 ; --- [ Pointer constant ] -----------------------------------------------------
 
