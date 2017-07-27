@@ -1,6 +1,6 @@
 { mkDerivation, base, bytestring, directory, filepath, llvm-hs
-, llvm-hs-pure, mtl, pretty-show, stdenv, tasty, tasty-hspec, text
-, transformers, wl-pprint-text
+, llvm-hs-pure, mtl, pretty-show, stdenv, tasty, tasty-golden
+, tasty-hspec, tasty-hunit, text, transformers, wl-pprint-text
 }:
 mkDerivation {
   pname = "llvm-hs-pretty";
@@ -11,7 +11,7 @@ mkDerivation {
   ];
   testHaskellDepends = [
     base directory filepath llvm-hs llvm-hs-pure mtl pretty-show tasty
-    tasty-hspec text transformers
+    tasty-golden tasty-hspec tasty-hunit text transformers
   ];
   doHaddock = false;
   doCheck = false;
