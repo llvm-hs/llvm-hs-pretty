@@ -327,7 +327,11 @@ instance PP GroupID where
 
 instance PP BasicBlock where
   pp (BasicBlock nm instrs term) =
-    pp nm <> ":" <$> indent 2 (vcat $ (fmap pp instrs) ++ [pp term])
+    label <$> indent 2 (vcat $ (fmap pp instrs) ++ [pp term])
+    where
+      label = case nm of
+        UnName _ -> "; <label>:" <> pp nm <> ":"
+        _ -> pp nm <> ":"
 
 instance PP Terminator where
   pp (Br dest meta) = "br" <+> label (pp dest)
