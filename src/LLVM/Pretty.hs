@@ -1,10 +1,9 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 {-# OPTIONS_GHC -fwarn-incomplete-uni-patterns #-}
 
@@ -169,7 +168,7 @@ instance PP Type where
   pp LabelType = "label"
 
 instance PP Global where
-  pp (Function {..}) =
+  pp Function {..} =
       case basicBlocks of
         [] ->
           ("declare" <+> pp linkage <+> pp callingConvention
@@ -193,14 +192,14 @@ instance PP Global where
             | otherwise = "align" <+> pp alignment
       gcName = maybe empty (\n -> "gc" <+> dquotes (text $ pack n)) (fmap unShort garbageCollectorName)
 
-  pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> ppMaybe unnamedAddr
+  pp GlobalVariable {..} = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> ppMaybe unnamedAddr
                              <+> kind <+> pp type' <+> ppMaybe initializer <> ppAlign alignment
     where
       hasInitializer = isJust initializer
       kind | isConstant = "constant"
            | otherwise  = "global"
 
-  pp (GlobalAlias {..}) = global (pp name) <+> "=" <+> pp linkage <+> ppMaybe unnamedAddr <+> "alias" <+> pp typ `cma` ppTyped aliasee
+  pp GlobalAlias {..} = global (pp name) <+> "=" <+> pp linkage <+> ppMaybe unnamedAddr <+> "alias" <+> pp typ `cma` ppTyped aliasee
     where
       typ = getElementType type'
 
@@ -256,7 +255,7 @@ instance PP FunctionAttribute where
    Speculatable        -> "speculatable"
 
 instance PP ParameterAttribute where
-  pp x = case x of
+  pp = \case
     ZeroExt                    -> "zeroext"
     SignExt                    -> "signext"
     InReg                      -> "inreg"
@@ -278,7 +277,7 @@ instance PP ParameterAttribute where
     SwiftError                 -> "swifterror"
 
 instance PP CC.CallingConvention where
-  pp x = case x of
+  pp = \case
    CC.Numbered word -> "cc" <+> pp word
    CC.C             -> "ccc"
    CC.Fast          -> "fastcc"
@@ -308,7 +307,7 @@ instance PP L.Linkage where
     pp = ppLinkage False
 
 ppLinkage :: Bool -> L.Linkage -> Doc
-ppLinkage omitExternal x = case x of
+ppLinkage omitExternal = \case
    L.External | omitExternal -> empty
               | otherwise    -> "external"
    L.Private                 -> "private"
@@ -355,7 +354,7 @@ instance PP Terminator where
   pp (CatchSwitch {..}) = error "Not Implemented"
 
 instance PP Instruction where
-  pp x = case x of
+  pp = \case
     Add {..}    -> "add"  <+> ppTyped operand0 `cma` pp operand1
     Sub {..}    -> "sub"  <+> ppTyped operand0 `cma` pp operand1
     Mul {..}    -> "mul"  <+> ppTyped operand0 `cma` pp operand1
