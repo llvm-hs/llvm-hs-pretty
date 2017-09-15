@@ -6,6 +6,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
+{-# OPTIONS_GHC -fwarn-incomplete-uni-patterns #-}
 
 module LLVM.Pretty (
   ppllvm,
@@ -163,8 +164,9 @@ instance PP Type where
                                else  "{" <> (commas $ fmap pp elementTypes ) <> "}"
   pp (ArrayType {..}) = brackets $ pp nArrayElements <+> "x" <+> pp elementType
   pp (NamedTypeReference name) = "%" <> pp name
-  pp (MetadataType) = "metadata"
-  pp (TokenType) = "token"
+  pp MetadataType = "metadata"
+  pp TokenType = "token"
+  pp LabelType = "label"
 
 instance PP Global where
   pp (Function {..}) =
@@ -251,6 +253,7 @@ instance PP FunctionAttribute where
    AllocSize a (Just b) -> "allocsize" <> parens (commas [pp a, pp b])
    InaccessibleMemOrArgMemOnly -> "inaccessiblemem_or_argmemonly"
    StringAttribute k v -> dquotes (short k) <> "=" <> dquotes (short v)
+   Speculatable        -> "speculatable"
 
 instance PP ParameterAttribute where
   pp x = case x of
@@ -299,7 +302,7 @@ instance PP CC.CallingConvention where
    CC.SPIR_KERNEL   -> "cc 76"
    CC.Intel_OCL_BI  -> "cc 77"
    CC.X86_64_SysV   -> "cc 78"
-   CC.X86_64_Win64  -> "cc 79"
+   CC.Win64         -> "cc 79"
 
 instance PP L.Linkage where
     pp = ppLinkage False
