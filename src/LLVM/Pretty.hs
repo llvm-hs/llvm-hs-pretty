@@ -460,7 +460,7 @@ instance PP C.Constant where
   pp (C.Float (F.PPC_FP128 val _)) = text $ pack $ printf "%6.6e" val
 
   pp (C.GlobalReference ty nm) = "@" <> pp nm
-  pp (C.Vector args) = "<" <+> commas (fmap pp args) <+> ">"
+  pp (C.Vector args) = "<" <+> commas (fmap ppTyped args) <+> ">"
 
   pp (C.Add {..})    = "add"  <+> ppTyped operand0 `cma` pp operand1
   pp (C.Sub {..})    = "sub"  <+> ppTyped operand0 `cma` pp operand1
