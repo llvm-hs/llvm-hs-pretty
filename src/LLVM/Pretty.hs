@@ -386,7 +386,7 @@ instance PP Instruction where
 
     ICmp {..}   -> "icmp" <+> pp iPredicate <+> ppTyped operand0 `cma` pp operand1
 
-    Call {..}   -> ppCall x
+    c@Call {..} -> ppCall c
     Select {..} -> "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
     SExt {..}   -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
     ZExt {..}   -> "zext" <+> ppTyped operand0 <+> "to" <+> pp type'
