@@ -460,7 +460,7 @@ instance PP C.Constant where
   pp (C.Float (F.PPC_FP128 val _)) = text $ pack $ printf "%6.6e" val
 
   pp (C.GlobalReference ty nm) = "@" <> pp nm
-  pp (C.Vector args) = "<" <+> commas (fmap pp args) <+> ">"
+  pp (C.Vector args) = "<" <+> commas (fmap ppTyped args) <+> ">"
 
   pp (C.Add {..})    = "add"  <+> ppTyped operand0 `cma` pp operand1
   pp (C.Sub {..})    = "sub"  <+> ppTyped operand0 `cma` pp operand1
@@ -497,7 +497,7 @@ instance PP C.Constant where
   pp C.SIToFP {..} = "sitofp" <+> ppTyped operand0 <+> "to" <+> pp type'
 
   pp (C.Struct _ _ elems) = spacedbraces $ commas $ fmap ppTyped elems
-  pp (C.Null {}) = "null"
+  pp (C.Null {}) = "zeroinitializer"
   pp (C.Undef {}) = "undef"
   pp (C.TokenNone {}) = "none"
   pp (C.BlockAddress fn blk) = "blockaddress" <> parens (commas (fmap pp [fn, blk]))

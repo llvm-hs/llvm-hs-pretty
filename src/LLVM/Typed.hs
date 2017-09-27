@@ -88,7 +88,12 @@ instance Typed C.Constant where
     typeOf (C.AddrSpaceCast {..}) = error "TODO"
 
 getElementPtrType :: Type -> [C.Constant] -> Type
-getElementPtrType ty cons = ptr i8 -- XXX
+getElementPtrType ty [] = ptr ty
+getElementPtrType (PointerType ty _) (_:is) = getElementPtrType ty is
+getElementPtrType (StructureType _ elTys) (C.Int 32 val:is) =
+  getElementPtrType (elTys !! fromIntegral val) is
+getElementPtrType (VectorType _ elTy) (_:is) = getElementPtrType elTy is
+getElementPtrType (ArrayType _ elTy) (_:is) = getElementPtrType elTy is
 
 getElementType :: Type -> Type
 getElementType (PointerType t _) = t
