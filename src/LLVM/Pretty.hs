@@ -203,12 +203,16 @@ instance PP Global where
     where
       typ = getElementType type'
 
+ppMetadata :: Maybe Metadata -> Doc
+ppMetadata Nothing = "null"
+ppMetadata (Just m) = pp m
+
 instance PP Definition where
   pp (GlobalDefinition x) = pp x
   pp (TypeDefinition nm ty) = local (pp nm) <+> "=" <+> "type" <+> maybe "opaque" pp ty
   pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap pp attrs))
-  pp (NamedMetadataDefinition nm meta) = short nm
-  pp (MetadataNodeDefinition node meta) = pp node
+  pp (NamedMetadataDefinition nm meta) = "!" <> short nm <+> "=" <+> "!" <> braces (commas (fmap pp meta))
+  pp (MetadataNodeDefinition node meta) = pp node <+> "=" <+> "!" <> braces (commas (fmap ppMetadata meta))
   pp (ModuleInlineAssembly asm) = "module asm" <+> dquotes (text (pack (BL.unpack asm)))
   pp (COMDAT _ _)             = "TODO" -- XXX: I've never used this, no idea.
 
@@ -322,7 +326,7 @@ ppLinkage omitExternal = \case
    L.WeakODR                 -> "weak_odr"
 
 instance PP MetadataNodeID where
-  pp (MetadataNodeID x) = "#" <> int (fromIntegral x)
+  pp (MetadataNodeID x) = "!" <> int (fromIntegral x)
 
 instance PP GroupID where
   pp (GroupID x) = "#" <> int (fromIntegral x)
@@ -442,13 +446,13 @@ instance PP Operand where
   pp (MetadataOperand mdata) = pp mdata
 
 instance PP Metadata where
-  pp (MDString str) = text (decodeShortUtf8 str)
+  pp (MDString str) = "!" <> dquotes (text (decodeShortUtf8 str))
   pp (MDNode node) = pp node
   pp (MDValue operand) = pp operand
 
 instance PP MetadataNode where
-  pp (MetadataNode xs) = error "TODO"
-  pp (MetadataNodeReference _) = error "TODO"
+  pp (MetadataNode xs) = "!" <> braces (commas (fmap ppMetadata xs))
+  pp (MetadataNodeReference ref) = pp ref
 
 instance PP C.Constant where
   pp (C.Int width val) = pp val
