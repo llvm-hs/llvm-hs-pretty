@@ -406,9 +406,9 @@ instance PP Instruction where
     PtrToInt {..} -> "ptrtoint" <+> ppTyped operand0 <+> "to" <+> pp type'
     IntToPtr {..} -> "inttoptr" <+> ppTyped operand0 <+> "to" <+> pp type'
 
-    InsertElement {..} -> error "Not implemeneted"
-    ShuffleVector {..} -> error "Not implemeneted"
-    ExtractElement {..} -> error "Not implemeneted"
+    InsertElement {..} -> "insertelement" <+> commas [ppTyped vector, ppTyped element, ppTyped index]
+    ShuffleVector {..} -> "shufflevector" <+> commas [ppTyped operand0, ppTyped operand1, ppTyped mask]
+    ExtractElement {..} -> "extractelement" <+> commas [ppTyped vector, ppTyped index]
     InsertValue {..} -> "insertvalue" <+> commas (ppTyped aggregate : ppTyped element : fmap pp indices')
 
     Fence {..} -> error "Not implemeneted"
