@@ -152,7 +152,7 @@ instance PP Type where
   pp (FloatingPointType DoubleFP)    = "double"
   pp (FloatingPointType FP128FP)     = "fp128"
   pp (FloatingPointType X86_FP80FP)  = "x86_fp80"
-  pp (FloatingPointType PPC_FP128FP) = "ppc_f128p"
+  pp (FloatingPointType PPC_FP128FP) = "ppc_fp128"
 
   pp VoidType = "void"
   pp (PointerType ref addr) = pp ref <> "*"
