@@ -155,7 +155,9 @@ instance PP Type where
   pp (FloatingPointType PPC_FP128FP) = "ppc_f128p"
 
   pp VoidType = "void"
-  pp (PointerType ref addr) = pp ref <> "*"
+  pp (PointerType ref (AS.AddrSpace addr))
+    | addr == 0 = pp ref <> "*"
+    | otherwise = pp ref <+> "addrspace" <> parens (pp addr) <> "*"
   pp ft@(FunctionType {..}) = pp resultType <+> ppFunctionArgumentTypes ft
   pp (VectorType {..}) = "<" <> pp nVectorElements <+> "x" <+> pp elementType <> ">"
   pp (StructureType {..}) = if isPacked
@@ -515,6 +517,7 @@ instance PP C.Constant where
   pp C.BitCast {..} = "bitcast" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
   pp C.PtrToInt {..} = "ptrtoint" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
   pp C.IntToPtr {..} = "inttoptr" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
+  pp C.AddrSpaceCast {..} = "addrspacecast" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
 
 instance PP a => PP (Named a) where
   pp (nm := a) = "%" <> pp nm <+> "=" <+> pp a
