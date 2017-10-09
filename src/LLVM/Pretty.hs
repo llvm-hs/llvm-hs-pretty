@@ -71,6 +71,9 @@ hlinecat = vcat . intersperse softbreak
 wrapbraces :: Doc -> Doc -> Doc
 wrapbraces leadIn x = (leadIn <> char '{') <$> x <$> char '}'
 
+angleBrackets :: Doc -> Doc
+angleBrackets x = char '<' <> x <> char '>'
+
 spacedbraces :: Doc -> Doc
 spacedbraces x = char '{' <+> x <+> char '}'
 
@@ -500,7 +503,11 @@ instance PP C.Constant where
   pp C.UIToFP {..} = "uitofp" <+> ppTyped operand0 <+> "to" <+> pp type'
   pp C.SIToFP {..} = "sitofp" <+> ppTyped operand0 <+> "to" <+> pp type'
 
-  pp (C.Struct _ _ elems) = spacedbraces $ commas $ fmap ppTyped elems
+  pp (C.Struct _ packed elems) =
+    let struct = spacedbraces $ commas $ fmap ppTyped elems
+    in if packed
+         then angleBrackets struct
+         else struct
   pp (C.Null {}) = "zeroinitializer"
   pp (C.Undef {}) = "undef"
   pp (C.TokenNone {}) = "none"
