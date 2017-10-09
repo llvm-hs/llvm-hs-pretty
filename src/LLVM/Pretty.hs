@@ -1,11 +1,11 @@
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
+{-# OPTIONS_GHC -fwarn-incomplete-uni-patterns #-}
 
 module LLVM.Pretty (
   ppllvm,
@@ -22,6 +22,7 @@ import LLVM.AST.Global
 import LLVM.AST.Type
 
 import LLVM.AST.Attribute
+import LLVM.AST.COMDAT
 import qualified LLVM.AST.Linkage as L
 import qualified LLVM.AST.Visibility as V
 import qualified LLVM.AST.CallingConvention as CC
@@ -70,6 +71,9 @@ hlinecat = vcat . intersperse softbreak
 
 wrapbraces :: Doc -> Doc -> Doc
 wrapbraces leadIn x = (leadIn <> char '{') <$> x <$> char '}'
+
+angleBrackets :: Doc -> Doc
+angleBrackets x = char '<' <> x <> char '>'
 
 spacedbraces :: Doc -> Doc
 spacedbraces x = char '{' <+> x <+> char '}'
@@ -152,10 +156,12 @@ instance PP Type where
   pp (FloatingPointType DoubleFP)    = "double"
   pp (FloatingPointType FP128FP)     = "fp128"
   pp (FloatingPointType X86_FP80FP)  = "x86_fp80"
-  pp (FloatingPointType PPC_FP128FP) = "ppc_f128p"
+  pp (FloatingPointType PPC_FP128FP) = "ppc_fp128"
 
   pp VoidType = "void"
-  pp (PointerType ref addr) = pp ref <> "*"
+  pp (PointerType ref (AS.AddrSpace addr))
+    | addr == 0 = pp ref <> "*"
+    | otherwise = pp ref <+> "addrspace" <> parens (pp addr) <> "*"
   pp ft@(FunctionType {..}) = pp resultType <+> ppFunctionArgumentTypes ft
   pp (VectorType {..}) = "<" <> pp nVectorElements <+> "x" <+> pp elementType <> ">"
   pp (StructureType {..}) = if isPacked
@@ -163,11 +169,12 @@ instance PP Type where
                                else  "{" <> (commas $ fmap pp elementTypes ) <> "}"
   pp (ArrayType {..}) = brackets $ pp nArrayElements <+> "x" <+> pp elementType
   pp (NamedTypeReference name) = "%" <> pp name
-  pp (MetadataType) = "metadata"
-  pp (TokenType) = "token"
+  pp MetadataType = "metadata"
+  pp TokenType = "token"
+  pp LabelType = "label"
 
 instance PP Global where
-  pp (Function {..}) =
+  pp Function {..} =
       case basicBlocks of
         [] ->
           ("declare" <+> pp linkage <+> pp callingConvention
@@ -191,25 +198,36 @@ instance PP Global where
             | otherwise = "align" <+> pp alignment
       gcName = maybe empty (\n -> "gc" <+> dquotes (text $ pack n)) (fmap unShort garbageCollectorName)
 
-  pp (GlobalVariable {..}) = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> ppMaybe unnamedAddr
+  pp GlobalVariable {..} = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> ppMaybe unnamedAddr
                              <+> kind <+> pp type' <+> ppMaybe initializer <> ppAlign alignment
     where
       hasInitializer = isJust initializer
       kind | isConstant = "constant"
            | otherwise  = "global"
 
-  pp (GlobalAlias {..}) = global (pp name) <+> "=" <+> pp linkage <+> ppMaybe unnamedAddr <+> "alias" <+> pp typ `cma` ppTyped aliasee
+  pp GlobalAlias {..} = global (pp name) <+> "=" <+> pp linkage <+> ppMaybe unnamedAddr <+> "alias" <+> pp typ `cma` ppTyped aliasee
     where
       typ = getElementType type'
+
+ppMetadata :: Maybe Metadata -> Doc
+ppMetadata Nothing = "null"
+ppMetadata (Just m) = pp m
 
 instance PP Definition where
   pp (GlobalDefinition x) = pp x
   pp (TypeDefinition nm ty) = local (pp nm) <+> "=" <+> "type" <+> maybe "opaque" pp ty
   pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap pp attrs))
-  pp (NamedMetadataDefinition nm meta) = short nm
-  pp (MetadataNodeDefinition node meta) = pp node
+  pp (NamedMetadataDefinition nm meta) = "!" <> short nm <+> "=" <+> "!" <> braces (commas (fmap pp meta))
+  pp (MetadataNodeDefinition node meta) = pp node <+> "=" <+> "!" <> braces (commas (fmap ppMetadata meta))
   pp (ModuleInlineAssembly asm) = "module asm" <+> dquotes (text (pack (BL.unpack asm)))
-  pp (COMDAT _ _)             = "TODO" -- XXX: I've never used this, no idea.
+  pp (COMDAT name selKind) = "$" <> short name <+> "=" <+> "comdat" <+> pp selKind
+
+instance PP SelectionKind where
+  pp Any = "any"
+  pp ExactMatch = "exactmatch"
+  pp Largest = "largest"
+  pp NoDuplicates = "noduplicates"
+  pp SameSize = "samesize"
 
 instance PP FunctionAttribute where
   pp = \case
@@ -251,9 +269,10 @@ instance PP FunctionAttribute where
    AllocSize a (Just b) -> "allocsize" <> parens (commas [pp a, pp b])
    InaccessibleMemOrArgMemOnly -> "inaccessiblemem_or_argmemonly"
    StringAttribute k v -> dquotes (short k) <> "=" <> dquotes (short v)
+   Speculatable        -> "speculatable"
 
 instance PP ParameterAttribute where
-  pp x = case x of
+  pp = \case
     ZeroExt                    -> "zeroext"
     SignExt                    -> "signext"
     InReg                      -> "inreg"
@@ -275,7 +294,7 @@ instance PP ParameterAttribute where
     SwiftError                 -> "swifterror"
 
 instance PP CC.CallingConvention where
-  pp x = case x of
+  pp = \case
    CC.Numbered word -> "cc" <+> pp word
    CC.C             -> "ccc"
    CC.Fast          -> "fastcc"
@@ -299,13 +318,13 @@ instance PP CC.CallingConvention where
    CC.SPIR_KERNEL   -> "cc 76"
    CC.Intel_OCL_BI  -> "cc 77"
    CC.X86_64_SysV   -> "cc 78"
-   CC.X86_64_Win64  -> "cc 79"
+   CC.Win64         -> "cc 79"
 
 instance PP L.Linkage where
     pp = ppLinkage False
 
 ppLinkage :: Bool -> L.Linkage -> Doc
-ppLinkage omitExternal x = case x of
+ppLinkage omitExternal = \case
    L.External | omitExternal -> empty
               | otherwise    -> "external"
    L.Private                 -> "private"
@@ -320,7 +339,7 @@ ppLinkage omitExternal x = case x of
    L.WeakODR                 -> "weak_odr"
 
 instance PP MetadataNodeID where
-  pp (MetadataNodeID x) = "#" <> int (fromIntegral x)
+  pp (MetadataNodeID x) = "!" <> int (fromIntegral x)
 
 instance PP GroupID where
   pp (GroupID x) = "#" <> int (fromIntegral x)
@@ -352,7 +371,7 @@ instance PP Terminator where
   pp (CatchSwitch {..}) = error "Not Implemented"
 
 instance PP Instruction where
-  pp x = case x of
+  pp = \case
     Add {..}    -> "add"  <+> ppTyped operand0 `cma` pp operand1
     Sub {..}    -> "sub"  <+> ppTyped operand0 `cma` pp operand1
     Mul {..}    -> "mul"  <+> ppTyped operand0 `cma` pp operand1
@@ -384,7 +403,7 @@ instance PP Instruction where
 
     ICmp {..}   -> "icmp" <+> pp iPredicate <+> ppTyped operand0 `cma` pp operand1
 
-    Call {..}   -> ppCall x
+    c@Call {..} -> ppCall c
     Select {..} -> "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
     SExt {..}   -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
     ZExt {..}   -> "zext" <+> ppTyped operand0 <+> "to" <+> pp type'
@@ -404,9 +423,9 @@ instance PP Instruction where
     PtrToInt {..} -> "ptrtoint" <+> ppTyped operand0 <+> "to" <+> pp type'
     IntToPtr {..} -> "inttoptr" <+> ppTyped operand0 <+> "to" <+> pp type'
 
-    InsertElement {..} -> error "Not implemeneted"
-    ShuffleVector {..} -> error "Not implemeneted"
-    ExtractElement {..} -> error "Not implemeneted"
+    InsertElement {..} -> "insertelement" <+> commas [ppTyped vector, ppTyped element, ppTyped index]
+    ShuffleVector {..} -> "shufflevector" <+> commas [ppTyped operand0, ppTyped operand1, ppTyped mask]
+    ExtractElement {..} -> "extractelement" <+> commas [ppTyped vector, ppTyped index]
     InsertValue {..} -> "insertvalue" <+> commas (ppTyped aggregate : ppTyped element : fmap pp indices')
 
     Fence {..} -> error "Not implemeneted"
@@ -440,13 +459,13 @@ instance PP Operand where
   pp (MetadataOperand mdata) = pp mdata
 
 instance PP Metadata where
-  pp (MDString str) = text (decodeShortUtf8 str)
+  pp (MDString str) = "!" <> dquotes (text (decodeShortUtf8 str))
   pp (MDNode node) = pp node
   pp (MDValue operand) = pp operand
 
 instance PP MetadataNode where
-  pp (MetadataNode xs) = error "TODO"
-  pp (MetadataNodeReference _) = error "TODO"
+  pp (MetadataNode xs) = "!" <> braces (commas (fmap ppMetadata xs))
+  pp (MetadataNodeReference ref) = pp ref
 
 instance PP C.Constant where
   pp (C.Int width val) = pp val
@@ -458,7 +477,7 @@ instance PP C.Constant where
   pp (C.Float (F.PPC_FP128 val _)) = text $ pack $ printf "%6.6e" val
 
   pp (C.GlobalReference ty nm) = "@" <> pp nm
-  pp (C.Vector args) = "<" <+> commas (fmap pp args) <+> ">"
+  pp (C.Vector args) = "<" <+> commas (fmap ppTyped args) <+> ">"
 
   pp (C.Add {..})    = "add"  <+> ppTyped operand0 `cma` pp operand1
   pp (C.Sub {..})    = "sub"  <+> ppTyped operand0 `cma` pp operand1
@@ -494,8 +513,12 @@ instance PP C.Constant where
   pp C.UIToFP {..} = "uitofp" <+> ppTyped operand0 <+> "to" <+> pp type'
   pp C.SIToFP {..} = "sitofp" <+> ppTyped operand0 <+> "to" <+> pp type'
 
-  pp (C.Struct _ _ elems) = spacedbraces $ commas $ fmap ppTyped elems
-  pp (C.Null {}) = "null"
+  pp (C.Struct _ packed elems) =
+    let struct = spacedbraces $ commas $ fmap ppTyped elems
+    in if packed
+         then angleBrackets struct
+         else struct
+  pp (C.Null {}) = "zeroinitializer"
   pp (C.Undef {}) = "undef"
   pp (C.TokenNone {}) = "none"
   pp (C.BlockAddress fn blk) = "blockaddress" <> parens (commas (fmap pp [fn, blk]))
@@ -513,6 +536,7 @@ instance PP C.Constant where
   pp C.BitCast {..} = "bitcast" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
   pp C.PtrToInt {..} = "ptrtoint" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
   pp C.IntToPtr {..} = "inttoptr" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
+  pp C.AddrSpaceCast {..} = "addrspacecast" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
 
 instance PP a => PP (Named a) where
   pp (nm := a) = "%" <> pp nm <+> "=" <+> pp a
