@@ -22,6 +22,7 @@ import LLVM.AST.Global
 import LLVM.AST.Type
 
 import LLVM.AST.Attribute
+import LLVM.AST.COMDAT
 import qualified LLVM.AST.Linkage as L
 import qualified LLVM.AST.Visibility as V
 import qualified LLVM.AST.CallingConvention as CC
@@ -219,7 +220,14 @@ instance PP Definition where
   pp (NamedMetadataDefinition nm meta) = "!" <> short nm <+> "=" <+> "!" <> braces (commas (fmap pp meta))
   pp (MetadataNodeDefinition node meta) = pp node <+> "=" <+> "!" <> braces (commas (fmap ppMetadata meta))
   pp (ModuleInlineAssembly asm) = "module asm" <+> dquotes (text (pack (BL.unpack asm)))
-  pp (COMDAT _ _)             = "TODO" -- XXX: I've never used this, no idea.
+  pp (COMDAT name selKind) = "$" <> short name <+> "=" <+> "comdat" <+> pp selKind
+
+instance PP SelectionKind where
+  pp Any = "any"
+  pp ExactMatch = "exactmatch"
+  pp Largest = "largest"
+  pp NoDuplicates = "noduplicates"
+  pp SameSize = "samesize"
 
 instance PP FunctionAttribute where
   pp = \case
