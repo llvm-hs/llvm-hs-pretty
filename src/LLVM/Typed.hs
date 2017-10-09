@@ -85,7 +85,7 @@ instance Typed C.Constant where
     typeOf (C.ExtractValue {..})    = extractValueType (typeOf aggregate) indices
     typeOf (C.InsertValue {..})     = typeOf aggregate
     typeOf (C.TokenNone)          = TokenType
-    typeOf (C.AddrSpaceCast {..}) = error "TODO"
+    typeOf (C.AddrSpaceCast {..}) = type'
 
 getElementPtrType :: Type -> [C.Constant] -> Type
 getElementPtrType ty [] = ptr ty
