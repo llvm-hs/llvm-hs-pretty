@@ -431,7 +431,7 @@ instance PP Instruction where
     Fence {..} -> error "Not implemeneted"
     AtomicRMW {..} -> error "Not implemeneted"
     CmpXchg {..} -> error "Not implemeneted"
-    AddrSpaceCast {..} -> error "Not implemeneted"
+    AddrSpaceCast {..} -> "addrspacecast" <+> ppTyped operand0 <+> "to" <+> pp type'
     VAArg {..} -> error "Not implemeneted"
 
     LandingPad {..} -> error "Not implemeneted"
