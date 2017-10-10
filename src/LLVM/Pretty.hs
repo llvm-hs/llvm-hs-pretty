@@ -268,7 +268,7 @@ instance PP FunctionAttribute where
    AllocSize a Nothing -> "allocsize" <> parens (pp a)
    AllocSize a (Just b) -> "allocsize" <> parens (commas [pp a, pp b])
    InaccessibleMemOrArgMemOnly -> "inaccessiblemem_or_argmemonly"
-   StringAttribute k v -> dquotes (short k) <> "=" <> dquotes (short v)
+   FA.StringAttribute k v -> dquotes (short k) <> "=" <> dquotes (short v)
    Speculatable        -> "speculatable"
 
 instance PP ParameterAttribute where
@@ -292,6 +292,7 @@ instance PP ParameterAttribute where
     Returned                   -> "returned"
     SwiftSelf                  -> "swiftself"
     SwiftError                 -> "swifterror"
+    PA.StringAttribute k v -> dquotes (short k) <> "=" <> dquotes (short v)
 
 instance PP CC.CallingConvention where
   pp = \case
