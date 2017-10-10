@@ -216,7 +216,7 @@ ppMetadata (Just m) = pp m
 instance PP Definition where
   pp (GlobalDefinition x) = pp x
   pp (TypeDefinition nm ty) = local (pp nm) <+> "=" <+> "type" <+> maybe "opaque" pp ty
-  pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap pp attrs))
+  pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap ppAttrInGroup attrs))
   pp (NamedMetadataDefinition nm meta) = "!" <> short nm <+> "=" <+> "!" <> braces (commas (fmap pp meta))
   pp (MetadataNodeDefinition node meta) = pp node <+> "=" <+> "!" <> braces (commas (fmap ppMetadata meta))
   pp (ModuleInlineAssembly asm) = "module asm" <+> dquotes (text (pack (BL.unpack asm)))
@@ -229,6 +229,11 @@ instance PP SelectionKind where
   pp NoDuplicates = "noduplicates"
   pp SameSize = "samesize"
 
+ppAttrInGroup :: FunctionAttribute -> Doc
+ppAttrInGroup = \case
+  StackAlignment n -> "alignstack=" <> pp n
+  attr -> pp attr
+
 instance PP FunctionAttribute where
   pp = \case
    NoReturn            -> "noreturn"
@@ -238,9 +243,9 @@ instance PP FunctionAttribute where
    FA.WriteOnly        -> "writeonly"
    NoInline            -> "noinline"
    AlwaysInline        -> "alwaysinline"
-   MinimizeSize        -> "minimizesize"
-   OptimizeForSize     -> "optimizeforsize"
-   OptimizeNone        -> "optimizenone"
+   MinimizeSize        -> "minsize"
+   OptimizeForSize     -> "optsize"
+   OptimizeNone        -> "optnone"
    SafeStack           -> "safestack"
    StackProtect        -> "ssp"
    StackProtectReq     -> "sspreq"
@@ -249,7 +254,7 @@ instance PP FunctionAttribute where
    NoImplicitFloat     -> "noimplicitfloat"
    Naked               -> "naked"
    InlineHint          -> "inlinehint"
-   StackAlignment n    -> "stackalign"
+   StackAlignment n    -> "alignstack" <> parens (pp n)
    ReturnsTwice        -> "returns_twice"
    UWTable             -> "uwtable"
    NonLazyBind         -> "nonlazybind"
