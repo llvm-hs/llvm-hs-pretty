@@ -655,6 +655,7 @@ ppCall Call { function = Right f,..}
       tail = case tailCallKind of
         Just Tail -> "tail"
         Just MustTail -> "musttail"
+        Just NoTail -> "notail"
         Nothing -> empty
 ppCall x = error "Non-callable argument. (Malformed AST)"
 
