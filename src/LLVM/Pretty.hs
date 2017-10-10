@@ -421,7 +421,7 @@ instance PP Instruction where
     ICmp {..}   -> "icmp" <+> pp iPredicate <+> ppTyped operand0 `cma` pp operand1
 
     c@Call {..} -> ppCall c
-    Select {..} -> "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
+    Select {..} -> "select" <+> commas [ppTyped condition', ppTyped trueValue, ppTyped falseValue]
     SExt {..}   -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
     ZExt {..}   -> "zext" <+> ppTyped operand0 <+> "to" <+> pp type'
     FPExt {..}   -> "fpext" <+> ppTyped operand0 <+> "to" <+> pp type'
@@ -518,7 +518,7 @@ instance PP C.Constant where
   pp (C.FCmp {..})   = "fcmp" <+> pp fpPredicate <+> ppTyped operand0 `cma` pp operand1
   pp C.ICmp {..}     = "icmp" <+> pp iPredicate <+> ppTyped operand0 `cma` pp operand1
 
-  pp (C.Select {..})  = "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
+  pp (C.Select {..})  = "select" <+> commas [ppTyped condition', ppTyped trueValue, ppTyped falseValue]
   pp (C.SExt {..})    = "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
   pp (C.ZExt {..})    = "zext" <+> ppTyped operand0 <+> "to" <+> pp type'
   pp (C.FPExt {..})   = "fpext" <+> ppTyped operand0 <+> "to" <+> pp type'
