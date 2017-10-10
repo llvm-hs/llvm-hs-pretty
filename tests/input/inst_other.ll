@@ -269,7 +269,7 @@ define void @call_6() {
 	%65 = call swiftcc i32 @f()
 	%66 = call webkit_jscc i32 @f()
 	%67 = call x86_64_sysvcc i32 @f()
-	%68 = call x86_64_win64cc i32 @f()
+	%68 = call win64cc i32 @f()
 	%69 = call x86_fastcallcc i32 @f()
 	%70 = call x86_intrcc i32 @f()
 	%71 = call x86_regcallcc i32 @f()

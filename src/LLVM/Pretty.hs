@@ -306,6 +306,8 @@ instance PP CC.CallingConvention where
    CC.AnyReg        -> "anyregcc"
    CC.PreserveMost  -> "preserve_mostcc"
    CC.PreserveAll   -> "preserve_allcc"
+   CC.Swift         -> "swiftcc"
+   CC.CXX_FastTLS   -> "cxx_fast_tlscc"
    CC.X86_StdCall   -> "cc 64"
    CC.X86_FastCall  -> "cc 65"
    CC.ARM_APCS      -> "cc 66"
@@ -320,6 +322,20 @@ instance PP CC.CallingConvention where
    CC.Intel_OCL_BI  -> "cc 77"
    CC.X86_64_SysV   -> "cc 78"
    CC.Win64         -> "cc 79"
+   CC.X86_Intr      -> "x86_intrcc"
+   CC.X86_RegCall   -> "x86_regcallcc"
+   CC.X86_VectorCall -> "x86_vectorcallcc"
+   CC.AVR_Intr      -> "avr_intrcc"
+   CC.AVR_Signal    -> "avr_signalcc"
+   CC.AVR_Builtin   -> "cc 86"
+   CC.HHVM          -> "hhvmcc"
+   CC.HHVM_C        -> "hhvm_ccc"
+   CC.AMDGPU_VS     -> "amdgpu_vs"
+   CC.AMDGPU_GS     -> "amdgpu_gs"
+   CC.AMDGPU_PS     -> "amdgpu_ps"
+   CC.AMDGPU_CS     -> "amdgpu_cs"
+   CC.AMDGPU_Kernel -> "amdgpu_kernel"
+   e -> error (show e)
 
 instance PP L.Linkage where
     pp = ppLinkage False
