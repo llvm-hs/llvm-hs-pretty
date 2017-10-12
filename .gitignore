@@ -8,3 +8,6 @@ dist/
 .stack-work
 tests/output/*.ll
 *.s
+dist-newstyle/
+cabal.project.local
+*~
