@@ -216,7 +216,7 @@ ppMetadata (Just m) = pp m
 instance PP Definition where
   pp (GlobalDefinition x) = pp x
   pp (TypeDefinition nm ty) = local (pp nm) <+> "=" <+> "type" <+> maybe "opaque" pp ty
-  pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap pp attrs))
+  pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap ppAttrInGroup attrs))
   pp (NamedMetadataDefinition nm meta) = "!" <> short nm <+> "=" <+> "!" <> braces (commas (fmap pp meta))
   pp (MetadataNodeDefinition node meta) = pp node <+> "=" <+> "!" <> braces (commas (fmap ppMetadata meta))
   pp (ModuleInlineAssembly asm) = "module asm" <+> dquotes (text (pack (BL.unpack asm)))
@@ -229,6 +229,11 @@ instance PP SelectionKind where
   pp NoDuplicates = "noduplicates"
   pp SameSize = "samesize"
 
+ppAttrInGroup :: FunctionAttribute -> Doc
+ppAttrInGroup = \case
+  StackAlignment n -> "alignstack=" <> pp n
+  attr -> pp attr
+
 instance PP FunctionAttribute where
   pp = \case
    NoReturn            -> "noreturn"
@@ -238,9 +243,9 @@ instance PP FunctionAttribute where
    FA.WriteOnly        -> "writeonly"
    NoInline            -> "noinline"
    AlwaysInline        -> "alwaysinline"
-   MinimizeSize        -> "minimizesize"
-   OptimizeForSize     -> "optimizeforsize"
-   OptimizeNone        -> "optimizenone"
+   MinimizeSize        -> "minsize"
+   OptimizeForSize     -> "optsize"
+   OptimizeNone        -> "optnone"
    SafeStack           -> "safestack"
    StackProtect        -> "ssp"
    StackProtectReq     -> "sspreq"
@@ -249,7 +254,7 @@ instance PP FunctionAttribute where
    NoImplicitFloat     -> "noimplicitfloat"
    Naked               -> "naked"
    InlineHint          -> "inlinehint"
-   StackAlignment n    -> "stackalign"
+   StackAlignment n    -> "alignstack" <> parens (pp n)
    ReturnsTwice        -> "returns_twice"
    UWTable             -> "uwtable"
    NonLazyBind         -> "nonlazybind"
@@ -268,7 +273,7 @@ instance PP FunctionAttribute where
    AllocSize a Nothing -> "allocsize" <> parens (pp a)
    AllocSize a (Just b) -> "allocsize" <> parens (commas [pp a, pp b])
    InaccessibleMemOrArgMemOnly -> "inaccessiblemem_or_argmemonly"
-   StringAttribute k v -> dquotes (short k) <> "=" <> dquotes (short v)
+   FA.StringAttribute k v -> dquotes (short k) <> "=" <> dquotes (short v)
    Speculatable        -> "speculatable"
 
 instance PP ParameterAttribute where
@@ -292,6 +297,7 @@ instance PP ParameterAttribute where
     Returned                   -> "returned"
     SwiftSelf                  -> "swiftself"
     SwiftError                 -> "swifterror"
+    PA.StringAttribute k v -> dquotes (short k) <> "=" <> dquotes (short v)
 
 instance PP CC.CallingConvention where
   pp = \case
@@ -305,6 +311,8 @@ instance PP CC.CallingConvention where
    CC.AnyReg        -> "anyregcc"
    CC.PreserveMost  -> "preserve_mostcc"
    CC.PreserveAll   -> "preserve_allcc"
+   CC.Swift         -> "swiftcc"
+   CC.CXX_FastTLS   -> "cxx_fast_tlscc"
    CC.X86_StdCall   -> "cc 64"
    CC.X86_FastCall  -> "cc 65"
    CC.ARM_APCS      -> "cc 66"
@@ -319,6 +327,20 @@ instance PP CC.CallingConvention where
    CC.Intel_OCL_BI  -> "cc 77"
    CC.X86_64_SysV   -> "cc 78"
    CC.Win64         -> "cc 79"
+   CC.X86_Intr      -> "x86_intrcc"
+   CC.X86_RegCall   -> "x86_regcallcc"
+   CC.X86_VectorCall -> "x86_vectorcallcc"
+   CC.AVR_Intr      -> "avr_intrcc"
+   CC.AVR_Signal    -> "avr_signalcc"
+   CC.AVR_Builtin   -> "cc 86"
+   CC.HHVM          -> "hhvmcc"
+   CC.HHVM_C        -> "hhvm_ccc"
+   CC.AMDGPU_VS     -> "amdgpu_vs"
+   CC.AMDGPU_GS     -> "amdgpu_gs"
+   CC.AMDGPU_PS     -> "amdgpu_ps"
+   CC.AMDGPU_CS     -> "amdgpu_cs"
+   CC.AMDGPU_Kernel -> "amdgpu_kernel"
+   e -> error (show e)
 
 instance PP L.Linkage where
     pp = ppLinkage False
@@ -404,7 +426,7 @@ instance PP Instruction where
     ICmp {..}   -> "icmp" <+> pp iPredicate <+> ppTyped operand0 `cma` pp operand1
 
     c@Call {..} -> ppCall c
-    Select {..} -> "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
+    Select {..} -> "select" <+> commas [ppTyped condition', ppTyped trueValue, ppTyped falseValue]
     SExt {..}   -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
     ZExt {..}   -> "zext" <+> ppTyped operand0 <+> "to" <+> pp type'
     FPExt {..}   -> "fpext" <+> ppTyped operand0 <+> "to" <+> pp type'
@@ -431,7 +453,7 @@ instance PP Instruction where
     Fence {..} -> error "Not implemeneted"
     AtomicRMW {..} -> error "Not implemeneted"
     CmpXchg {..} -> error "Not implemeneted"
-    AddrSpaceCast {..} -> error "Not implemeneted"
+    AddrSpaceCast {..} -> "addrspacecast" <+> ppTyped operand0 <+> "to" <+> pp type'
     VAArg {..} -> error "Not implemeneted"
 
     LandingPad {..} -> error "Not implemeneted"
@@ -501,7 +523,7 @@ instance PP C.Constant where
   pp (C.FCmp {..})   = "fcmp" <+> pp fpPredicate <+> ppTyped operand0 `cma` pp operand1
   pp C.ICmp {..}     = "icmp" <+> pp iPredicate <+> ppTyped operand0 `cma` pp operand1
 
-  pp (C.Select {..})  = "select" <+> pp condition' <+> pp trueValue <+> pp falseValue
+  pp (C.Select {..})  = "select" <+> commas [ppTyped condition', ppTyped trueValue, ppTyped falseValue]
   pp (C.SExt {..})    = "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
   pp (C.ZExt {..})    = "zext" <+> ppTyped operand0 <+> "to" <+> pp type'
   pp (C.FPExt {..})   = "fpext" <+> ppTyped operand0 <+> "to" <+> pp type'
@@ -638,6 +660,7 @@ ppCall Call { function = Right f,..}
       tail = case tailCallKind of
         Just Tail -> "tail"
         Just MustTail -> "musttail"
+        Just NoTail -> "notail"
         Nothing -> empty
 ppCall x = error "Non-callable argument. (Malformed AST)"
 
