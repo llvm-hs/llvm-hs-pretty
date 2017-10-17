@@ -54,14 +54,14 @@ $ nix-shell
 $ cabal run
 ```
 
-Standalone Example
-------------------
+Example
+-------
 
 To try out the standalone example run:
 
 ```bash
 $ stack repl
-$ :load Standalone.hs
+$ :load Example.hs
 main
 ```
 
