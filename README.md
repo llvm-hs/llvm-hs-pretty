@@ -11,7 +11,7 @@ Usage
 -----
 
 ```bash
-sudo apt-get install llvm-dev-4.0
+sudo apt-get install llvm-dev-5.0
 ```
 
 There is a single function ``ppllvm`` that maps a LLVM.AST.Module to a
@@ -39,6 +39,7 @@ Using stack:
 $ stac build
 $ stack test
 ```
+
 Using cabal:
 
 ```bash
