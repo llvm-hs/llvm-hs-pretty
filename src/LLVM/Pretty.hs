@@ -339,8 +339,9 @@ instance PP CC.CallingConvention where
    CC.AMDGPU_GS     -> "amdgpu_gs"
    CC.AMDGPU_PS     -> "amdgpu_ps"
    CC.AMDGPU_CS     -> "amdgpu_cs"
+   CC.AMDGPU_HS     -> "amdgpu_hs"
    CC.AMDGPU_Kernel -> "amdgpu_kernel"
-   e -> error (show e)
+   CC.MSP430_Builtin -> "msp430"
 
 instance PP L.Linkage where
     pp = ppLinkage False
@@ -385,11 +386,17 @@ instance PP Terminator where
                    `cma` label (pp defaultDest)
                    <+> brackets (hsep [ ppTyped v `cma` label (pp l) | (v,l) <- dests ])
   pp (Unreachable _) = "unreachable"
-  pp (IndirectBr {..}) = error "Not Implemented"
+  pp (IndirectBr op dests meta) = "indirectbr" <+> ppTyped op <+>
+    brackets (hsep [ label (pp l) | l <- dests ])
+
   pp (Invoke {..}) = error "Not Implemented"
-  pp (Resume {..}) = error "Not Implemented"
-  pp (CleanupRet {..}) = error "Not Implemented"
-  pp (CatchRet {..}) = error "Not Implemented"
+  pp (Resume op meta) = "resume "<+> ppTyped op
+  pp (CleanupRet pad dest meta) =
+    case  dest of
+      Nothing    -> "cleanupret"
+      Just dest' -> "cleanupret" <+> "from" <+> label (pp dest') <+> "unwind" <+> "to" <+> pp pad
+  pp (CatchRet catchPad succ meta)
+    = "catchret" <+> "from" <+> pp catchPad <+> "to" <+> label (pp succ)
   pp (CatchSwitch {..}) = error "Not Implemented"
 
 instance PP Instruction where
@@ -450,9 +457,11 @@ instance PP Instruction where
     ExtractElement {..} -> "extractelement" <+> commas [ppTyped vector, ppTyped index]
     InsertValue {..} -> "insertvalue" <+> commas (ppTyped aggregate : ppTyped element : fmap pp indices')
 
-    Fence {..} -> error "Not implemeneted"
+    Fence {..} -> "fence" <+> pp atomicity
     AtomicRMW {..} -> error "Not implemeneted"
-    CmpXchg {..} -> error "Not implemeneted"
+    CmpXchg {..} -> ppVolatile volatile <+> ppTyped address `cma` ppTyped expected `cma` ppTyped replacement
+      <+> pp atomicity <+> pp failureMemoryOrdering
+
     AddrSpaceCast {..} -> "addrspacecast" <+> ppTyped operand0 <+> "to" <+> pp type'
     VAArg {..} -> error "Not implemeneted"
 
@@ -601,6 +610,24 @@ instance PP IP.IntegerPredicate where
    IP.SLT -> "slt"
    IP.SLE -> "sle"
 
+instance PP Atomicity where
+  pp (scope, order) =
+    pp scope <+> pp order
+
+instance PP SynchronizationScope where
+  pp = \case
+    SingleThread -> "singlethreaded"
+    System -> mempty
+
+instance PP MemoryOrdering where
+  pp = \case
+    Unordered              -> "unordered"
+    Monotonic              -> "monotonic"
+    Acquire                -> "acquire"
+    Release                -> "release"
+    AcquireRelease         -> "acq_rel"
+    SequentiallyConsistent -> "seq_cst"
+
 -------------------------------------------------------------------------------
 -- Special Case Hacks
 -------------------------------------------------------------------------------
@@ -618,6 +645,10 @@ escape c    = if isAscii c && not (isControl c)
         pad0 [] = "00"
         pad0 [x] = "0" <> char x
         pad0 xs = text (pack xs)
+
+ppVolatile :: Bool -> Doc
+ppVolatile True = "volatile"
+ppVolatile False = mempty
 
 ppIntAsChar :: Integral a => a -> Doc
 ppIntAsChar = escape . chr . fromIntegral

@@ -116,7 +116,21 @@ define void @store_6(i32* %x) {
 
 ; ~~~ [ cmpxchg ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-; TODO: add test cases for cmpxchg instruction.
+define void @getelementptr_1(i32* %x) {
+  entry:
+    %orig = load atomic i32, i32* %ptr unordered, align 4
+    br label %loop
+
+  loop:
+    %cmp = phi i32 [ %orig, %entry ], [%value_loaded, %loop]
+    %squared = mul i32 %cmp, %cmp
+    %val_success = cmpxchg i32* %ptr, i32 %cmp, i32 %squared acq_rel monotonic
+    %value_loaded = extractvalue { i32, i1 } %val_success, 0
+    %success = extractvalue { i32, i1 } %val_success, 1
+    br i1 %success, label %done, label %loop
+  done:
+    ret void
+}
 
 ; ~~~ [ atomicrmw ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
