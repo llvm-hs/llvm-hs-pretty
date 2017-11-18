@@ -392,7 +392,7 @@ instance PP Terminator where
                  `cma` label (pp defaultDest)
                  <+> brackets (hsep [ ppTyped v `cma` label (pp l) | (v,l) <- dests ])
     Unreachable {..} -> "unreachable"
-    IndirectBr op dests meta -> "indirectbr" <+> ppTyped op <+>
+    IndirectBr op dests meta -> "indirectbr" <+> ppTyped op `cma`
      brackets (hsep [ label (pp l) | l <- dests ])
 
     e @ Invoke {..} ->

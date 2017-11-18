@@ -97,7 +97,12 @@ case3:
 
 ; ~~~ [ indirectbr ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-; TODO: add test cases for indirectbr terminator.
+define i32 @f() nounwind {
+  entry:
+    indirectbr i8* undef, []
+  exit:
+    indirectbr i8* undef, [label %exit]
+}
 
 ; ~~~ [ invoke ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
