@@ -381,31 +381,32 @@ instance PP BasicBlock where
         _ -> pp nm <> ":"
 
 instance PP Terminator where
-  pp (Br dest meta) = "br" <+> label (pp dest)
-  pp (Ret val meta) = "ret" <+> maybe "void" ppTyped val
-  pp (CondBr cond tdest fdest meta) =
-      "br" <+> ppTyped cond
-    `cma` label (pp tdest)
-    `cma` label (pp fdest)
-  pp (Switch {..}) = "switch" <+> ppTyped operand0'
-                   `cma` label (pp defaultDest)
-                   <+> brackets (hsep [ ppTyped v `cma` label (pp l) | (v,l) <- dests ])
-  pp (Unreachable _) = "unreachable"
-  pp (IndirectBr op dests meta) = "indirectbr" <+> ppTyped op <+>
-    brackets (hsep [ label (pp l) | l <- dests ])
+  pp = \case
+    Br dest meta -> "br" <+> label (pp dest)
+    Ret val meta -> "ret" <+> maybe "void" ppTyped val
+    CondBr cond tdest fdest meta ->
+     "br" <+> ppTyped cond
+     `cma` label (pp tdest)
+     `cma` label (pp fdest)
+    Switch {..} -> "switch" <+> ppTyped operand0'
+                 `cma` label (pp defaultDest)
+                 <+> brackets (hsep [ ppTyped v `cma` label (pp l) | (v,l) <- dests ])
+    Unreachable {..} -> "unreachable"
+    IndirectBr op dests meta -> "indirectbr" <+> ppTyped op <+>
+     brackets (hsep [ label (pp l) | l <- dests ])
 
-  pp (e @ Invoke {..}) =
-    ppInvoke e
-    <+> "to" <+> label (pp returnDest)
-    <+> "unwind" <+> label (pp exceptionDest)
-  pp (Resume op meta) = "resume "<+> ppTyped op
-  pp (CleanupRet pad dest meta) =
-    case  dest of
-      Nothing    -> "cleanupret"
-      Just dest' -> "cleanupret" <+> "from" <+> label (pp dest') <+> "unwind" <+> "to" <+> pp pad
-  pp (CatchRet catchPad succ meta)
-    = "catchret" <+> "from" <+> pp catchPad <+> "to" <+> label (pp succ)
-  pp (CatchSwitch {..}) = error "Not Implemented"
+    e @ Invoke {..} ->
+     ppInvoke e
+     <+> "to" <+> label (pp returnDest)
+     <+> "unwind" <+> label (pp exceptionDest)
+    Resume op meta -> "resume "<+> ppTyped op
+    CleanupRet pad dest meta ->
+     case  dest of
+       Nothing    -> "cleanupret"
+       Just dest' -> "cleanupret" <+> "from" <+> label (pp dest') <+> "unwind" <+> "to" <+> pp pad
+    CatchRet catchPad succ meta ->
+      "catchret" <+> "from" <+> pp catchPad <+> "to" <+> label (pp succ)
+    CatchSwitch {..} -> error "Not Implemented"
 
 instance PP Instruction where
   pp = \case
