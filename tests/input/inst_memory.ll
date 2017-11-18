@@ -112,11 +112,16 @@ define void @store_6(i32* %x) {
 
 ; ~~~ [ fence ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-; TODO: add test cases for fence instruction.
+define void @fence() {
+    fence singlethread seq_cst
+    fence acquire
+    fence release
+    fence acq_rel
+}
 
 ; ~~~ [ cmpxchg ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-define void @getelementptr_1(i32* %x) {
+define void @cmpxchg_1(i32* %x) {
   entry:
     %orig = load atomic i32, i32* %ptr unordered, align 4
     br label %loop
@@ -134,7 +139,17 @@ define void @getelementptr_1(i32* %x) {
 
 ; ~~~ [ atomicrmw ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-; TODO: add test cases for atomicrmw instruction.
+define void @atomicrmw() {
+    atomicrmw add i8* %Q, i8 1 monotonic
+    atomicrmw add i32* %x, i32 10 seq_cst
+    atomicrmw volatile umin i32* %word, i32 22 singlethread monotonic
+}
+
+; ~~~ [ resume ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+define void @resume() {
+  resume { i8*, i32 } { i8* bitcast (void ()* @f12 to i8*), i32 42 }
+}
 
 ; ~~~ [ getelementptr ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

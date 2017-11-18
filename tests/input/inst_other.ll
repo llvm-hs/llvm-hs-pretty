@@ -381,18 +381,44 @@ define double @call_18() {
 
 ; ~~~ [ va_arg ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-; TODO: add test cases for va_arg instruction.
+define void @va_arg() {
+    va_arg i8* %p, float
+}
 
 ; ~~~ [ landingpad ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-; TODO: add test cases for landingpad instruction.
+define void @landingpad() {
+    landingpad { i8*, i32 } cleanup
+    landingpad { i8*, i32 }
+          catch i8* bitcast ({ i8*, i8* }* @_ZTI13ParseErrorMsg to i8*)
+}
 
 ; ~~~ [ catchpad ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-; TODO: add test cases for catchpad instruction.
+define void @catchpad() {
+  catchpad within %cs2 [i32* %arg1]
+  catchpad within %cs []
+}
 
 ; ~~~ [ cleanuppad ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-; TODO: add test cases for cleanuppad instruction.
+define void @cleanuppad() {
+    cleanuppad within none [i32 undef]
+    cleanuppad within %cs []
+}
+
+; ~~~ [ cleanupret ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+define void @cleanupret() {
+    cleanupret from %cleanup unwind to caller
+    cleanupret from %cleanup unwind label %continue
+}
+
+; ~~~ [ invoke ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+define void @invoke() {
+    invoke void @llvm.donothing() to label %normal unwind label %exception
+    invoke fastcc void @f.fastcc()
+}
 
 attributes #0 = { "qux" }
