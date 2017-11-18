@@ -390,8 +390,7 @@ define void @va_arg(i8* %p) {
 
 define void @landingpad() {
     landingpad { i8*, i32 } cleanup
-    landingpad { i8*, i32 }
-          catch i8* bitcast (i32* @g1 to i8*)
+    landingpad { i8*, i32 } catch i8* bitcast (i32* @g1 to i8*)
     ret void
 }
 
@@ -427,10 +426,14 @@ define void @cleanupret() {
 
 ; ~~~ [ invoke ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+declare void @llvm.donothing() nounwind readnone
+
 define void @invoke() {
-    invoke void @llvm.donothing() to label %normal unwind label %exception
-    invoke fastcc void @f.fastcc()
-    ret void
+    normal:
+      invoke void @llvm.donothing() to label %normal unwind label %exception
+      invoke fastcc void @llvm.donothing() to label %normal unwind label %exception
+    exception:
+      ret void
 }
 
 attributes #0 = { "qux" }

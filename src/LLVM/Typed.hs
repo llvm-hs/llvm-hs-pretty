@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module LLVM.Typed (
   Typed(..),
@@ -23,6 +24,10 @@ instance Typed Operand where
     typeOf (LocalReference t _) = t
     typeOf (ConstantOperand c)  = typeOf c
     typeOf _                    = MetadataType
+
+instance Typed CallableOperand where
+  typeOf (Right op) = typeOf op
+  typeOf (Left asm) = error "typeOf inline assembler is not defined. (Malformed AST)"
 
 instance Typed C.Constant where
     typeOf (C.Int bits _)  = IntegerType bits
@@ -102,7 +107,7 @@ getElementType t = error $ "this should be a pointer type" ++ show t
 extractValueType = error "extract"
 
 instance Typed F.SomeFloat where
-    typeOf (F.Half _)          = FloatingPointType HalfFP 
+    typeOf (F.Half _)          = FloatingPointType HalfFP
     typeOf (F.Single _)        = FloatingPointType FloatFP
     typeOf (F.Double _)        = FloatingPointType DoubleFP
     typeOf (F.Quadruple _ _)   = FloatingPointType FP128FP

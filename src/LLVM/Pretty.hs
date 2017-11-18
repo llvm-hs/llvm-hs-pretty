@@ -97,8 +97,13 @@ a `cma` b = a <> "," <+> b
 class PP p where
   pp :: p -> Doc
 
+ppMaybe :: PP a => Maybe a -> Doc
 ppMaybe (Just x) = pp x
 ppMaybe Nothing = empty
+
+ppBool :: Doc -> Bool -> Doc
+ppBool x True = x
+ppBool x False = empty
 
 -- XXX: horrible hack
 unShort :: BS.ShortByteString -> [Char]
@@ -389,7 +394,10 @@ instance PP Terminator where
   pp (IndirectBr op dests meta) = "indirectbr" <+> ppTyped op <+>
     brackets (hsep [ label (pp l) | l <- dests ])
 
-  pp (Invoke {..}) = error "Not Implemented"
+  pp (e @ Invoke {..}) =
+    ppInvoke e
+    <+> "to" <+> label (pp returnDest)
+    <+> "unwind" <+> label (pp exceptionDest)
   pp (Resume op meta) = "resume "<+> ppTyped op
   pp (CleanupRet pad dest meta) =
     case  dest of
@@ -463,9 +471,11 @@ instance PP Instruction where
       <+> pp atomicity <+> pp failureMemoryOrdering
 
     AddrSpaceCast {..} -> "addrspacecast" <+> ppTyped operand0 <+> "to" <+> pp type'
-    VAArg {..} -> error "Not implemeneted"
+    VAArg {..} -> "va_arg" <+> ppTyped argList `cma` pp type'
 
-    LandingPad {..} -> error "Not implemeneted"
+    LandingPad {..} ->
+      "landingpad" <+> pp type' <+> ppBool "cleanup" cleanup
+      <+> commas (fmap pp clauses)
     CatchPad {..} -> error "Not implemeneted"
     CleanupPad {..} -> error "Not implemeneted"
 
@@ -476,6 +486,11 @@ instance PP Instruction where
 instance PP CallableOperand where
   pp (Left asm) = error "CallableOperand"
   pp (Right op) = pp op
+
+instance PP LandingPadClause where
+  pp = \case
+    Catch c  -> "catch" <+> ppTyped c
+    Filter c -> "filter" <+> ppTyped c
 
 instance PP [Either GroupID FunctionAttribute] where
   pp x = hsep $ fmap pp x
@@ -694,6 +709,21 @@ ppCall Call { function = Right f,..}
         Just NoTail -> "notail"
         Nothing -> empty
 ppCall x = error "Non-callable argument. (Malformed AST)"
+
+-- Differs from Call in record name conventions only so needs a seperate almost
+-- identical function. :(
+ppInvoke :: Terminator -> Doc
+ppInvoke Invoke { function' = Right f,..}
+  = "invoke" <+> pp callingConvention' <+> pp resultType <+> ftype
+    <+> pp f <> parens (commas $ fmap pp arguments') <+> pp functionAttributes'
+    where
+      (functionType@FunctionType {..}) = referencedType (typeOf f)
+      ftype = if isVarArg
+              then ppFunctionArgumentTypes functionType
+              else empty
+      referencedType (PointerType t _) = referencedType t
+      referencedType t                 = t
+ppInvoke x = error "Non-callable argument. (Malformed AST)"
 
 ppSingleBlock :: BasicBlock -> Doc
 ppSingleBlock (BasicBlock nm instrs term) = (vcat $ (fmap pp instrs) ++ [pp term])
