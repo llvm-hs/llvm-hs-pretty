@@ -117,11 +117,12 @@ define void @fence() {
     fence acquire
     fence release
     fence acq_rel
+    ret void
 }
 
 ; ~~~ [ cmpxchg ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-define void @cmpxchg_1(i32* %x) {
+define void @cmpxchg_1(i32* %ptr) {
   entry:
     %orig = load atomic i32, i32* %ptr unordered, align 4
     br label %loop
@@ -139,16 +140,19 @@ define void @cmpxchg_1(i32* %x) {
 
 ; ~~~ [ atomicrmw ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-define void @atomicrmw() {
+define void @atomicrmw(i8* %Q, i32* %word, i32* %x) {
     atomicrmw add i8* %Q, i8 1 monotonic
     atomicrmw add i32* %x, i32 10 seq_cst
     atomicrmw volatile umin i32* %word, i32 22 singlethread monotonic
+    ret void
 }
 
 ; ~~~ [ resume ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-define void @resume() {
-  resume { i8*, i32 } { i8* bitcast (void ()* @f12 to i8*), i32 42 }
+declare i32 @__gxx_personality_v0(...)
+
+define void @resume() personality i32 (...)* @__gxx_personality_v0 {
+ resume { i8*, i32 } { i8* bitcast (void ()* @resume to i8*), i32 42 }
 }
 
 ; ~~~ [ getelementptr ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
