@@ -381,8 +381,9 @@ define double @call_18() {
 
 ; ~~~ [ va_arg ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-define void @va_arg() {
+define void @va_arg(i8* %p) {
     va_arg i8* %p, float
+    ret void
 }
 
 ; ~~~ [ landingpad ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -390,28 +391,38 @@ define void @va_arg() {
 define void @landingpad() {
     landingpad { i8*, i32 } cleanup
     landingpad { i8*, i32 }
-          catch i8* bitcast ({ i8*, i8* }* @_ZTI13ParseErrorMsg to i8*)
+          catch i8* bitcast (i32* @g1 to i8*)
+    ret void
 }
 
 ; ~~~ [ catchpad ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-define void @catchpad() {
-  catchpad within %cs2 [i32* %arg1]
-  catchpad within %cs []
+define void @catchpad(i32* %arg1) {
+  catchpad:
+    %cs = catchswitch within none [label %catchpad] unwind to caller
+    catchpad within %cs []
+    ret void
 }
 
 ; ~~~ [ cleanuppad ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 define void @cleanuppad() {
+  catchpad:
+    %cs = catchswitch within none [label %catchpad] unwind to caller
     cleanuppad within none [i32 undef]
     cleanuppad within %cs []
+    ret void
 }
 
 ; ~~~ [ cleanupret ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 define void @cleanupret() {
-    cleanupret from %cleanup unwind to caller
-    cleanupret from %cleanup unwind label %continue
+  catchpad:
+    %cs = catchswitch within none [label %catchpad] unwind to caller
+    cleanupret from %cs unwind to caller
+    cleanupret from %cs unwind label %continue
+  continue:
+    ret void
 }
 
 ; ~~~ [ invoke ] ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -419,6 +430,7 @@ define void @cleanupret() {
 define void @invoke() {
     invoke void @llvm.donothing() to label %normal unwind label %exception
     invoke fastcc void @f.fastcc()
+    ret void
 }
 
 attributes #0 = { "qux" }
