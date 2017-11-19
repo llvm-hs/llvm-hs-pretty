@@ -132,7 +132,7 @@ instance PP Name where
     where
         name = unShort nm
         first = head name
-        isFirst c = isLetter c || c == '-' || c == '_'
+        isFirst c = isLetter c || c == '-' || c == '_' || c == '$' || c == '.'
         isRest c = isDigit c || isFirst c
   pp (UnName x) = int (fromIntegral x)
 
