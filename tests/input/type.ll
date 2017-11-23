@@ -15,8 +15,7 @@
 %t6 = type double
 
 ; MMX type
-; TODO: add test case for MMX type.
-;%t7 = type x86_mmx
+%t7 = type x86_mmx
 
 ; Pointer type
 %t8 = type i32*
@@ -29,8 +28,7 @@
 %t11 = type label
 
 ; Token type
-; TODO: add test case for token type.
-;%t12 = type token
+%t12 = type token
 
 ; Metadata type
 %t13 = type metadata
@@ -74,10 +72,6 @@ declare fp128 @f13()
 declare x86_fp80 @f14()
 declare ppc_fp128 @f15()
 
-; --- [ MMX type ] -------------------------------------------------------------
-
-; TODO: add test case for MMX type.
-
 ; --- [ Pointer type ] ---------------------------------------------------------
 
 declare i8* @f16()
@@ -85,18 +79,6 @@ declare i8* @f16()
 ; --- [ Vector type ] ----------------------------------------------------------
 
 declare <2 x i8> @f17()
-
-; --- [ Label type ] -----------------------------------------------------------
-
-define void @f18() {
-	br label %foo
-foo:
-	ret void
-}
-
-; --- [ Token type ] -----------------------------------------------------------
-
-; TODO: add test case for token type.
 
 ; --- [ Metadata type ] --------------------------------------------------------
 
@@ -118,9 +100,11 @@ declare <{ i32, i8, i32 }> @f25()
 
 declare %t5 @f26()
 declare %t6 @f27()
+;declare %t7 @f28() ;; XXX: bug in llvm-hs?
 declare %t8 @f29()
 declare %t9 @f30()
 declare %t10 @f31()
+declare %t12 @f32()
 declare void @f33(%t13 %x)
 declare %t14 @f34()
 declare %t15 @f35()
