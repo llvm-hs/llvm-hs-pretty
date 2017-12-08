@@ -31,6 +31,7 @@ import qualified LLVM.AST.FloatingPointPredicate as FP
 import qualified LLVM.AST.IntegerPredicate as IP
 import qualified LLVM.AST.AddrSpace as AS
 import qualified LLVM.AST.Float as F
+import qualified LLVM.AST.RMWOperation as RMW
 import LLVM.AST.ParameterAttribute as PA
 import LLVM.AST.FunctionAttribute as FA
 
@@ -48,9 +49,15 @@ import Text.PrettyPrint.Leijen.Text
 import qualified Data.ByteString.Char8 as BL
 import qualified Data.ByteString.Short as BS
 import Data.Char (chr, ord, isAscii, isControl, isLetter, isDigit)
+import Data.Foldable (toList)
 import Data.List (intersperse)
 import Data.Maybe (isJust)
 import Numeric (showHex)
+
+import Data.Array.Unsafe
+import Data.Array.MArray
+import Data.Array.ST
+import Control.Monad.ST
 
 -------------------------------------------------------------------------------
 -- Utils
@@ -204,9 +211,14 @@ instance PP Global where
       gcName = maybe empty (\n -> "gc" <+> dquotes (text $ pack n)) (fmap unShort garbageCollectorName)
 
   pp GlobalVariable {..} = global (pp name) <+> "=" <+> ppLinkage hasInitializer linkage <+> ppMaybe unnamedAddr
-                             <+> kind <+> pp type' <+> ppMaybe initializer <> ppAlign alignment
+                             <+> addrSpace' <+> kind <+> pp type' <+> ppMaybe initializer <> ppAlign alignment
     where
       hasInitializer = isJust initializer
+      addrSpace' =
+        case addrSpace of
+          AS.AddrSpace addr
+            | addr == 0 -> mempty
+            | otherwise -> "addrspace" <> parens (pp addr)
       kind | isConstant = "constant"
            | otherwise  = "global"
 
@@ -401,12 +413,13 @@ instance PP Terminator where
      <+> "unwind" <+> label (pp exceptionDest)
     Resume op meta -> "resume "<+> ppTyped op
     CleanupRet pad dest meta ->
-     case  dest of
-       Nothing    -> "cleanupret"
-       Just dest' -> "cleanupret" <+> "from" <+> label (pp dest') <+> "unwind" <+> "to" <+> pp pad
+     "cleanupret" <+> "from" <+> pp pad <+> "unwind" <+> maybe "to caller" (label . pp) dest
     CatchRet catchPad succ meta ->
       "catchret" <+> "from" <+> pp catchPad <+> "to" <+> label (pp succ)
-    CatchSwitch {..} -> error "Not Implemented"
+    CatchSwitch {..} ->
+      "catchswitch" <+> "within" <+> pp parentPad' <+>
+      brackets (commas (map (label . pp) (toList catchHandlers))) <+>
+      "unwind" <+> "to" <+> maybe "caller" pp defaultUnwindDest
 
 instance PP Instruction where
   pp = \case
@@ -467,8 +480,8 @@ instance PP Instruction where
     InsertValue {..} -> "insertvalue" <+> commas (ppTyped aggregate : ppTyped element : fmap pp indices')
 
     Fence {..} -> "fence" <+> pp atomicity
-    AtomicRMW {..} -> error "Not implemeneted"
-    CmpXchg {..} -> ppVolatile volatile <+> ppTyped address `cma` ppTyped expected `cma` ppTyped replacement
+    AtomicRMW {..} -> "atomicrmw" <+> ppVolatile volatile <+> pp rmwOperation <+> ppTyped address `cma` ppTyped value <+> pp atomicity
+    CmpXchg {..} -> "cmpxchg" <+> ppVolatile volatile <+> ppTyped address `cma` ppTyped expected `cma` ppTyped replacement
       <+> pp atomicity <+> pp failureMemoryOrdering
 
     AddrSpaceCast {..} -> "addrspacecast" <+> ppTyped operand0 <+> "to" <+> pp type'
@@ -477,8 +490,8 @@ instance PP Instruction where
     LandingPad {..} ->
       "landingpad" <+> pp type' <+> ppBool "cleanup" cleanup
       <+> commas (fmap pp clauses)
-    CatchPad {..} -> error "Not implemeneted"
-    CleanupPad {..} -> error "Not implemeneted"
+    CatchPad {..} -> "catchpad" <+> "within" <+> pp catchSwitch <+> brackets (commas (map ppTyped args))
+    CleanupPad {..} -> "cleanuppad" <+> "within" <+> pp parentPad <+> brackets (commas (map ppTyped args))
 
     where
       bounds True = "inbounds"
@@ -516,8 +529,14 @@ instance PP MetadataNode where
 
 instance PP C.Constant where
   pp (C.Int width val) = pp val
-  pp (C.Float (F.Double val))      = text $ pack $ printf "%6.6e" val
-  pp (C.Float (F.Single val))      = text $ pack $ printf "%6.6e" val
+  pp (C.Float (F.Double val))      =
+    if specialFP val
+      then "0x" <> (text . pack) (showHex (doubleToWord val) "")
+      else text $ pack $ printf "%6.6e" val
+  pp (C.Float (F.Single val))      =
+    if specialFP val
+      then "0x" <> (text . pack) (showHex (floatToWord val) "")
+      else text $ pack $ printf "%6.6e" val
   pp (C.Float (F.Half val))        = text $ pack $ printf "%6.6e" val
   pp (C.Float (F.Quadruple val _)) = text $ pack $ printf "%6.6e" val
   pp (C.Float (F.X86_FP80 val _))  = text $ pack $ printf "%6.6e" val
@@ -632,7 +651,7 @@ instance PP Atomicity where
 
 instance PP SynchronizationScope where
   pp = \case
-    SingleThread -> "singlethreaded"
+    SingleThread -> "syncscope(\"singlethreaded\")"
     System -> mempty
 
 instance PP MemoryOrdering where
@@ -643,6 +662,20 @@ instance PP MemoryOrdering where
     Release                -> "release"
     AcquireRelease         -> "acq_rel"
     SequentiallyConsistent -> "seq_cst"
+
+instance PP RMW.RMWOperation where
+  pp = \case
+    RMW.Xchg -> "xchg"
+    RMW.Add -> "add"
+    RMW.Sub -> "sub"
+    RMW.And -> "and"
+    RMW.Nand -> "nand"
+    RMW.Or -> "or"
+    RMW.Xor -> "xor"
+    RMW.Max -> "max"
+    RMW.Min -> "min"
+    RMW.UMax -> "umax"
+    RMW.UMin -> "umin"
 
 -------------------------------------------------------------------------------
 -- Special Case Hacks
@@ -734,3 +767,19 @@ ppllvm = displayT . renderPretty 0.4 100 . pp
 
 ppll :: PP a => a -> Text
 ppll = displayT . renderPretty 0.4 100 . pp
+
+-- According to <https://stackoverflow.com/a/7002812/3877993> this is
+-- the best way to cast floats to words.
+
+cast :: (MArray (STUArray s) a (ST s),
+         MArray (STUArray s) b (ST s)) => a -> ST s b
+cast x = newArray (0 :: Int, 0) x >>= castSTUArray >>= flip readArray 0
+
+doubleToWord :: Double -> Word64
+doubleToWord x = runST (cast x)
+
+floatToWord :: Float -> Word32
+floatToWord x = runST (cast x)
+
+specialFP :: RealFloat a => a -> Bool
+specialFP f = isNaN f || f == 1 / 0 || f == - 1 / 0
