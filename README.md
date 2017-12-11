@@ -2,6 +2,7 @@ llvm-hs-pretty
 --------------
 
 [![Build Status](https://travis-ci.org/llvm-hs/llvm-hs-pretty.svg)](https://travis-ci.org/llvm-hs/llvm-hs-pretty)
+[![Hackage](https://img.shields.io/hackage/v/llvm-hs-pretty.svg)](https://hackage.haskell.org/package/picosat)
 
 A pretty printer for ``llvm-hs-pure``. Goal is to be able to pretty print a
 sufficiently large subset of the LLVM AST from pure Haskell without having to go
