@@ -10,7 +10,6 @@ packages:
 
 extra-deps:
 - llvm-hs-5.1.0
-- llvm-hs-pure-5.1.0
 
 flags:
   llvm-hs:
