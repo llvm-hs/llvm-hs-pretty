@@ -12,6 +12,7 @@ Usage
 -----
 
 ```bash
+# This is only necessary for running the test suite
 sudo apt-get install llvm-dev-5.0
 ```
 
