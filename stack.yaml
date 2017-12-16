@@ -1,15 +1,10 @@
 resolver: lts-9.17
 packages:
 - '.'
-- location:
-    git: https://github.com/llvm-hs/llvm-hs.git
-    commit: 29c584b28800be81229f2c04e71ff2bb130407a5
-  extra-dep: true
-  subdirs:
-    - llvm-hs-pure
 
 extra-deps:
-- llvm-hs-5.1.0
+- llvm-hs-5.1.1
+- llvm-hs-pure-5.1.1
 
 flags:
   llvm-hs:
