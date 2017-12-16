@@ -30,6 +30,7 @@ before_install:
   - export CXX=/usr/bin/$GXX
 
 install:
+  - stack update
   - stack --no-terminal --install-ghc test --only-dependencies
 
 script:
