@@ -30,7 +30,7 @@ library
     array                >= 0.5,
     base                 >= 4.6   && < 5.0,
     bytestring           >= 0.10,
-    llvm-hs-pure         >= 5.1,
+    llvm-hs-pure         >= 5.1.1,
     text                 >= 0.1,
     wl-pprint-text       >= 1.1
 
