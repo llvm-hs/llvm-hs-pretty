@@ -11,13 +11,7 @@ through the C++ API.
 Usage
 -----
 
-```bash
-# This is only necessary for running the test suite
-sudo apt-get install llvm-dev-5.0
-```
-
-There is a single function ``ppllvm`` that maps a LLVM.AST.Module to a
-String.
+There is a single function ``ppllvm`` that maps a LLVM.AST.Module to a String.
 
 ```haskell
 import LLVM.AST
@@ -28,6 +22,11 @@ ppllvm :: Module -> Text
 
 Tests
 -----
+
+```bash
+# This is only necessary for running the test suite
+sudo apt-get install llvm-dev-5.0
+```
 
 The test suite currently consists of round tripping a LLVM IR from correct IR
 outputted by the llc toolchain, parsing into llvm-general AST and then printing

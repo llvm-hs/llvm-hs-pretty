@@ -131,6 +131,12 @@ instance PP Word64 where
 instance PP Integer where
   pp = integer
 
+instance PP BS.ShortByteString where
+  pp = pp . unShort
+
+instance PP [Char] where
+  pp = text . pack
+
 instance PP Name where
   pp (Name nm)
    | BS.null nm = dquotes empty
@@ -378,6 +384,9 @@ ppLinkage omitExternal = \case
    L.LinkOnceODR             -> "linkonce_odr"
    L.WeakODR                 -> "weak_odr"
 
+instance PP InstructionMetadata where
+  pp meta = commas ["!" <> pp x <> "!" <> ("{" <> pp y <> "}") | (x,y) <- meta]
+
 instance PP MetadataNodeID where
   pp (MetadataNodeID x) = "!" <> int (fromIntegral x)
 
@@ -423,7 +432,7 @@ instance PP Terminator where
 
 instance PP Instruction where
   pp = \case
-    Add {..}    -> "add"  <+> ppTyped operand0 `cma` pp operand1
+    Add {..}    -> "add"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
     Sub {..}    -> "sub"  <+> ppTyped operand0 `cma` pp operand1
     Mul {..}    -> "mul"  <+> ppTyped operand0 `cma` pp operand1
     Shl {..}    -> "shl"  <+> ppTyped operand0 `cma` pp operand1
@@ -783,3 +792,7 @@ floatToWord x = runST (cast x)
 
 specialFP :: RealFloat a => a -> Bool
 specialFP f = isNaN f || f == 1 / 0 || f == - 1 / 0
+
+ppInstrMeta :: InstructionMetadata -> Doc
+ppInstrMeta [] = mempty
+ppInstrMeta xs = "," <> pp xs
