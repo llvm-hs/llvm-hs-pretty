@@ -433,25 +433,25 @@ instance PP Terminator where
 instance PP Instruction where
   pp = \case
     Add {..}    -> "add"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
-    Sub {..}    -> "sub"  <+> ppTyped operand0 `cma` pp operand1
-    Mul {..}    -> "mul"  <+> ppTyped operand0 `cma` pp operand1
-    Shl {..}    -> "shl"  <+> ppTyped operand0 `cma` pp operand1
-    AShr {..}   -> "ashr" <+> ppTyped operand0 `cma` pp operand1
-    LShr {..}   -> "lshr" <+> ppTyped operand0 `cma` pp operand1
-    And {..}    -> "and"  <+> ppTyped operand0 `cma` pp operand1
-    Or {..}     -> "or"   <+> ppTyped operand0 `cma` pp operand1
-    Xor {..}    -> "xor"  <+> ppTyped operand0 `cma` pp operand1
-    SDiv {..}   -> "sdiv"  <+> ppTyped operand0 `cma` pp operand1
-    UDiv {..}   -> "udiv"  <+> ppTyped operand0 `cma` pp operand1
-    SRem {..}   -> "srem"  <+> ppTyped operand0 `cma` pp operand1
-    URem {..}   -> "urem"  <+> ppTyped operand0 `cma` pp operand1
+    Sub {..}    -> "sub"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    Mul {..}    -> "mul"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    Shl {..}    -> "shl"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    AShr {..}   -> "ashr" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    LShr {..}   -> "lshr" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    And {..}    -> "and"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    Or {..}     -> "or"   <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    Xor {..}    -> "xor"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    SDiv {..}   -> "sdiv"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    UDiv {..}   -> "udiv"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    SRem {..}   -> "srem"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    URem {..}   -> "urem"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
 
-    FAdd {..}   -> "fadd" <+> ppTyped operand0 `cma` pp operand1
-    FSub {..}   -> "fsub" <+> ppTyped operand0 `cma` pp operand1
-    FMul {..}   -> "fmul" <+> ppTyped operand0 `cma` pp operand1
-    FDiv {..}   -> "fdiv" <+> ppTyped operand0 `cma` pp operand1
-    FRem {..}   -> "frem" <+> ppTyped operand0 `cma` pp operand1
-    FCmp {..}   -> "fcmp" <+> pp fpPredicate <+> ppTyped operand0 `cma` pp operand1
+    FAdd {..}   -> "fadd" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    FSub {..}   -> "fsub" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    FMul {..}   -> "fmul" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    FDiv {..}   -> "fdiv" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    FRem {..}   -> "frem" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    FCmp {..}   -> "fcmp" <+> pp fpPredicate <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
 
     Alloca {..} -> "alloca" <+> pp allocatedType <> num <> ppAlign alignment
       where num   = case numElements of Nothing -> empty
@@ -461,27 +461,27 @@ instance PP Instruction where
       where PointerType argTy _ = typeOf address
     Phi {..}    -> "phi" <+> pp type' <+> commas (fmap phiIncoming incomingValues)
 
-    ICmp {..}   -> "icmp" <+> pp iPredicate <+> ppTyped operand0 `cma` pp operand1
+    ICmp {..}   -> "icmp" <+> pp iPredicate <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
 
     c@Call {..} -> ppCall c
     Select {..} -> "select" <+> commas [ppTyped condition', ppTyped trueValue, ppTyped falseValue]
-    SExt {..}   -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
-    ZExt {..}   -> "zext" <+> ppTyped operand0 <+> "to" <+> pp type'
-    FPExt {..}   -> "fpext" <+> ppTyped operand0 <+> "to" <+> pp type'
-    Trunc {..}  -> "trunc" <+> ppTyped operand0 <+> "to" <+> pp type'
-    FPTrunc {..}  -> "fptrunc" <+> ppTyped operand0 <+> "to" <+> pp type'
+    SExt {..}   -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    ZExt {..}   -> "zext" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    FPExt {..}   -> "fpext" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    Trunc {..}  -> "trunc" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    FPTrunc {..}  -> "fptrunc" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
 
     GetElementPtr {..} -> "getelementptr" <+> bounds inBounds <+> commas (pp argTy : fmap ppTyped (address:indices))
       where argTy = getElementType $ typeOf address
     ExtractValue {..} -> "extractvalue" <+> commas (ppTyped aggregate : fmap pp indices')
 
-    BitCast {..} -> "bitcast" <+> ppTyped operand0 <+> "to" <+> pp type'
-    FPToUI {..} -> "fptoui" <+> ppTyped operand0 <+> "to" <+> pp type'
-    FPToSI {..} -> "fptosi" <+> ppTyped operand0 <+> "to" <+> pp type'
-    UIToFP {..} -> "uitofp" <+> ppTyped operand0 <+> "to" <+> pp type'
-    SIToFP {..} -> "sitofp" <+> ppTyped operand0 <+> "to" <+> pp type'
-    PtrToInt {..} -> "ptrtoint" <+> ppTyped operand0 <+> "to" <+> pp type'
-    IntToPtr {..} -> "inttoptr" <+> ppTyped operand0 <+> "to" <+> pp type'
+    BitCast {..} -> "bitcast" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    FPToUI {..} -> "fptoui" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    FPToSI {..} -> "fptosi" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    UIToFP {..} -> "uitofp" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    SIToFP {..} -> "sitofp" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    PtrToInt {..} -> "ptrtoint" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    IntToPtr {..} -> "inttoptr" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
 
     InsertElement {..} -> "insertelement" <+> commas [ppTyped vector, ppTyped element, ppTyped index]
     ShuffleVector {..} -> "shufflevector" <+> commas [ppTyped operand0, ppTyped operand1, ppTyped mask]
