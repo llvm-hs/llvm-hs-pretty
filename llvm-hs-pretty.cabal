@@ -22,6 +22,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     
     LLVM.Pretty
+  other-modules:
     LLVM.Token
   ghc-options:
     -fwarn-incomplete-patterns
