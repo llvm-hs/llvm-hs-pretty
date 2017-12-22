@@ -403,32 +403,48 @@ instance PP BasicBlock where
 
 instance PP Terminator where
   pp = \case
-    Br dest meta -> "br" <+> label (pp dest)
-    Ret val meta -> "ret" <+> maybe "void" ppTyped val
+    Br dest meta -> "br" <+> label (pp dest) <+> ppInstrMeta meta
+
+    Ret val meta -> "ret" <+> maybe "void" ppTyped val <+> ppInstrMeta meta
+
     CondBr cond tdest fdest meta ->
      "br" <+> ppTyped cond
      `cma` label (pp tdest)
      `cma` label (pp fdest)
+     <+> ppInstrMeta meta
+
     Switch {..} -> "switch" <+> ppTyped operand0'
                  `cma` label (pp defaultDest)
                  <+> brackets (hsep [ ppTyped v `cma` label (pp l) | (v,l) <- dests ])
-    Unreachable {..} -> "unreachable"
+                 <+> ppInstrMeta metadata'
+
+    Unreachable {..} -> "unreachable" <+> ppInstrMeta metadata'
+
     IndirectBr op dests meta -> "indirectbr" <+> ppTyped op `cma`
      brackets (hsep [ label (pp l) | l <- dests ])
+     <+> ppInstrMeta meta
 
     e @ Invoke {..} ->
      ppInvoke e
      <+> "to" <+> label (pp returnDest)
      <+> "unwind" <+> label (pp exceptionDest)
-    Resume op meta -> "resume "<+> ppTyped op
+     <+> ppInstrMeta metadata'
+
+    Resume op meta -> "resume "<+> ppTyped op <+> ppInstrMeta meta
+
     CleanupRet pad dest meta ->
-     "cleanupret" <+> "from" <+> pp pad <+> "unwind" <+> maybe "to caller" (label . pp) dest
+      "cleanupret" <+> "from" <+> pp pad <+> "unwind" <+> maybe "to caller" (label . pp) dest
+      <+> ppInstrMeta meta
+
     CatchRet catchPad succ meta ->
       "catchret" <+> "from" <+> pp catchPad <+> "to" <+> label (pp succ)
+      <+> ppInstrMeta meta
+
     CatchSwitch {..} ->
       "catchswitch" <+> "within" <+> pp parentPad' <+>
       brackets (commas (map (label . pp) (toList catchHandlers))) <+>
       "unwind" <+> "to" <+> maybe "caller" pp defaultUnwindDest
+      <+> ppInstrMeta metadata'
 
 instance PP Instruction where
   pp = \case
