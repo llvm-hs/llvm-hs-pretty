@@ -131,6 +131,12 @@ instance PP Word64 where
 instance PP Integer where
   pp = integer
 
+instance PP BS.ShortByteString where
+  pp = pp . unShort
+
+instance PP [Char] where
+  pp = text . pack
+
 instance PP Name where
   pp (Name nm)
    | BS.null nm = dquotes empty
@@ -378,6 +384,9 @@ ppLinkage omitExternal = \case
    L.LinkOnceODR             -> "linkonce_odr"
    L.WeakODR                 -> "weak_odr"
 
+instance PP InstructionMetadata where
+  pp meta = commas ["!" <> pp x <> "!" <> ("{" <> pp y <> "}") | (x,y) <- meta]
+
 instance PP MetadataNodeID where
   pp (MetadataNodeID x) = "!" <> int (fromIntegral x)
 
@@ -394,104 +403,120 @@ instance PP BasicBlock where
 
 instance PP Terminator where
   pp = \case
-    Br dest meta -> "br" <+> label (pp dest)
-    Ret val meta -> "ret" <+> maybe "void" ppTyped val
+    Br dest meta -> "br" <+> label (pp dest) <+> ppInstrMeta meta
+
+    Ret val meta -> "ret" <+> maybe "void" ppTyped val <+> ppInstrMeta meta
+
     CondBr cond tdest fdest meta ->
      "br" <+> ppTyped cond
      `cma` label (pp tdest)
      `cma` label (pp fdest)
+     <+> ppInstrMeta meta
+
     Switch {..} -> "switch" <+> ppTyped operand0'
                  `cma` label (pp defaultDest)
                  <+> brackets (hsep [ ppTyped v `cma` label (pp l) | (v,l) <- dests ])
-    Unreachable {..} -> "unreachable"
+                 <+> ppInstrMeta metadata'
+
+    Unreachable {..} -> "unreachable" <+> ppInstrMeta metadata'
+
     IndirectBr op dests meta -> "indirectbr" <+> ppTyped op `cma`
      brackets (hsep [ label (pp l) | l <- dests ])
+     <+> ppInstrMeta meta
 
     e @ Invoke {..} ->
      ppInvoke e
      <+> "to" <+> label (pp returnDest)
      <+> "unwind" <+> label (pp exceptionDest)
-    Resume op meta -> "resume "<+> ppTyped op
+     <+> ppInstrMeta metadata'
+
+    Resume op meta -> "resume "<+> ppTyped op <+> ppInstrMeta meta
+
     CleanupRet pad dest meta ->
-     "cleanupret" <+> "from" <+> pp pad <+> "unwind" <+> maybe "to caller" (label . pp) dest
+      "cleanupret" <+> "from" <+> pp pad <+> "unwind" <+> maybe "to caller" (label . pp) dest
+      <+> ppInstrMeta meta
+
     CatchRet catchPad succ meta ->
       "catchret" <+> "from" <+> pp catchPad <+> "to" <+> label (pp succ)
+      <+> ppInstrMeta meta
+
     CatchSwitch {..} ->
       "catchswitch" <+> "within" <+> pp parentPad' <+>
       brackets (commas (map (label . pp) (toList catchHandlers))) <+>
       "unwind" <+> "to" <+> maybe "caller" pp defaultUnwindDest
+      <+> ppInstrMeta metadata'
 
 instance PP Instruction where
   pp = \case
-    Add {..}    -> "add"  <+> ppTyped operand0 `cma` pp operand1
-    Sub {..}    -> "sub"  <+> ppTyped operand0 `cma` pp operand1
-    Mul {..}    -> "mul"  <+> ppTyped operand0 `cma` pp operand1
-    Shl {..}    -> "shl"  <+> ppTyped operand0 `cma` pp operand1
-    AShr {..}   -> "ashr" <+> ppTyped operand0 `cma` pp operand1
-    LShr {..}   -> "lshr" <+> ppTyped operand0 `cma` pp operand1
-    And {..}    -> "and"  <+> ppTyped operand0 `cma` pp operand1
-    Or {..}     -> "or"   <+> ppTyped operand0 `cma` pp operand1
-    Xor {..}    -> "xor"  <+> ppTyped operand0 `cma` pp operand1
-    SDiv {..}   -> "sdiv"  <+> ppTyped operand0 `cma` pp operand1
-    UDiv {..}   -> "udiv"  <+> ppTyped operand0 `cma` pp operand1
-    SRem {..}   -> "srem"  <+> ppTyped operand0 `cma` pp operand1
-    URem {..}   -> "urem"  <+> ppTyped operand0 `cma` pp operand1
+    Add {..}    -> "add"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    Sub {..}    -> "sub"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    Mul {..}    -> "mul"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    Shl {..}    -> "shl"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    AShr {..}   -> "ashr" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    LShr {..}   -> "lshr" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    And {..}    -> "and"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    Or {..}     -> "or"   <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    Xor {..}    -> "xor"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    SDiv {..}   -> "sdiv"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    UDiv {..}   -> "udiv"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    SRem {..}   -> "srem"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    URem {..}   -> "urem"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
 
-    FAdd {..}   -> "fadd" <+> ppTyped operand0 `cma` pp operand1
-    FSub {..}   -> "fsub" <+> ppTyped operand0 `cma` pp operand1
-    FMul {..}   -> "fmul" <+> ppTyped operand0 `cma` pp operand1
-    FDiv {..}   -> "fdiv" <+> ppTyped operand0 `cma` pp operand1
-    FRem {..}   -> "frem" <+> ppTyped operand0 `cma` pp operand1
-    FCmp {..}   -> "fcmp" <+> pp fpPredicate <+> ppTyped operand0 `cma` pp operand1
+    FAdd {..}   -> "fadd" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    FSub {..}   -> "fsub" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    FMul {..}   -> "fmul" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    FDiv {..}   -> "fdiv" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    FRem {..}   -> "frem" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    FCmp {..}   -> "fcmp" <+> pp fpPredicate <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
 
-    Alloca {..} -> "alloca" <+> pp allocatedType <> num <> ppAlign alignment
+    Alloca {..} -> "alloca" <+> pp allocatedType <> num <> ppAlign alignment <+> ppInstrMeta metadata
       where num   = case numElements of Nothing -> empty
                                         Just o -> "," <+> ppTyped o
     Store {..}  -> "store" <+> ppTyped value `cma` ppTyped address <> ppAlign alignment
-    Load {..}   -> "load" <+> pp argTy `cma` ppTyped address <> ppAlign alignment
+    Load {..}   -> "load" <+> pp argTy `cma` ppTyped address <> ppAlign alignment <+> ppInstrMeta metadata
       where PointerType argTy _ = typeOf address
-    Phi {..}    -> "phi" <+> pp type' <+> commas (fmap phiIncoming incomingValues)
+    Phi {..}    -> "phi" <+> pp type' <+> commas (fmap phiIncoming incomingValues) <+> ppInstrMeta metadata
 
-    ICmp {..}   -> "icmp" <+> pp iPredicate <+> ppTyped operand0 `cma` pp operand1
+    ICmp {..}   -> "icmp" <+> pp iPredicate <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
 
-    c@Call {..} -> ppCall c
-    Select {..} -> "select" <+> commas [ppTyped condition', ppTyped trueValue, ppTyped falseValue]
-    SExt {..}   -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type'
-    ZExt {..}   -> "zext" <+> ppTyped operand0 <+> "to" <+> pp type'
-    FPExt {..}   -> "fpext" <+> ppTyped operand0 <+> "to" <+> pp type'
-    Trunc {..}  -> "trunc" <+> ppTyped operand0 <+> "to" <+> pp type'
-    FPTrunc {..}  -> "fptrunc" <+> ppTyped operand0 <+> "to" <+> pp type'
+    c@Call {..} -> ppCall c  <+> ppInstrMeta metadata
+    Select {..} -> "select" <+> commas [ppTyped condition', ppTyped trueValue, ppTyped falseValue] <+> ppInstrMeta metadata
+    SExt {..}   -> "sext" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata
+    ZExt {..}   -> "zext" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata
+    FPExt {..}   -> "fpext" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata
+    Trunc {..}  -> "trunc" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata
+    FPTrunc {..}  -> "fptrunc" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata
 
-    GetElementPtr {..} -> "getelementptr" <+> bounds inBounds <+> commas (pp argTy : fmap ppTyped (address:indices))
+    GetElementPtr {..} -> "getelementptr" <+> bounds inBounds <+> commas (pp argTy : fmap ppTyped (address:indices)) <+> ppInstrMeta metadata
       where argTy = getElementType $ typeOf address
-    ExtractValue {..} -> "extractvalue" <+> commas (ppTyped aggregate : fmap pp indices')
+    ExtractValue {..} -> "extractvalue" <+> commas (ppTyped aggregate : fmap pp indices') <+> ppInstrMeta metadata
 
-    BitCast {..} -> "bitcast" <+> ppTyped operand0 <+> "to" <+> pp type'
-    FPToUI {..} -> "fptoui" <+> ppTyped operand0 <+> "to" <+> pp type'
-    FPToSI {..} -> "fptosi" <+> ppTyped operand0 <+> "to" <+> pp type'
-    UIToFP {..} -> "uitofp" <+> ppTyped operand0 <+> "to" <+> pp type'
-    SIToFP {..} -> "sitofp" <+> ppTyped operand0 <+> "to" <+> pp type'
-    PtrToInt {..} -> "ptrtoint" <+> ppTyped operand0 <+> "to" <+> pp type'
-    IntToPtr {..} -> "inttoptr" <+> ppTyped operand0 <+> "to" <+> pp type'
+    BitCast {..} -> "bitcast" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    FPToUI {..} -> "fptoui" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    FPToSI {..} -> "fptosi" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    UIToFP {..} -> "uitofp" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    SIToFP {..} -> "sitofp" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    PtrToInt {..} -> "ptrtoint" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    IntToPtr {..} -> "inttoptr" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
 
-    InsertElement {..} -> "insertelement" <+> commas [ppTyped vector, ppTyped element, ppTyped index]
-    ShuffleVector {..} -> "shufflevector" <+> commas [ppTyped operand0, ppTyped operand1, ppTyped mask]
-    ExtractElement {..} -> "extractelement" <+> commas [ppTyped vector, ppTyped index]
-    InsertValue {..} -> "insertvalue" <+> commas (ppTyped aggregate : ppTyped element : fmap pp indices')
+    InsertElement {..} -> "insertelement" <+> commas [ppTyped vector, ppTyped element, ppTyped index] <+> ppInstrMeta metadata
+    ShuffleVector {..} -> "shufflevector" <+> commas [ppTyped operand0, ppTyped operand1, ppTyped mask] <+> ppInstrMeta metadata
+    ExtractElement {..} -> "extractelement" <+> commas [ppTyped vector, ppTyped index] <+> ppInstrMeta metadata
+    InsertValue {..} -> "insertvalue" <+> commas (ppTyped aggregate : ppTyped element : fmap pp indices') <+> ppInstrMeta metadata
 
-    Fence {..} -> "fence" <+> pp atomicity
-    AtomicRMW {..} -> "atomicrmw" <+> ppVolatile volatile <+> pp rmwOperation <+> ppTyped address `cma` ppTyped value <+> pp atomicity
+    Fence {..} -> "fence" <+> pp atomicity <+> ppInstrMeta metadata
+    AtomicRMW {..} -> "atomicrmw" <+> ppVolatile volatile <+> pp rmwOperation <+> ppTyped address `cma` ppTyped value <+> pp atomicity  <+> ppInstrMeta metadata
     CmpXchg {..} -> "cmpxchg" <+> ppVolatile volatile <+> ppTyped address `cma` ppTyped expected `cma` ppTyped replacement
-      <+> pp atomicity <+> pp failureMemoryOrdering
+      <+> pp atomicity <+> pp failureMemoryOrdering <+> ppInstrMeta metadata
 
-    AddrSpaceCast {..} -> "addrspacecast" <+> ppTyped operand0 <+> "to" <+> pp type'
-    VAArg {..} -> "va_arg" <+> ppTyped argList `cma` pp type'
+    AddrSpaceCast {..} -> "addrspacecast" <+> ppTyped operand0 <+> "to" <+> pp type' <+> ppInstrMeta metadata
+    VAArg {..} -> "va_arg" <+> ppTyped argList `cma` pp type' <+> ppInstrMeta metadata
 
     LandingPad {..} ->
-      "landingpad" <+> pp type' <+> ppBool "cleanup" cleanup
+      "landingpad" <+> pp type' <+> ppBool "cleanup" cleanup <+> ppInstrMeta metadata
       <+> commas (fmap pp clauses)
-    CatchPad {..} -> "catchpad" <+> "within" <+> pp catchSwitch <+> brackets (commas (map ppTyped args))
-    CleanupPad {..} -> "cleanuppad" <+> "within" <+> pp parentPad <+> brackets (commas (map ppTyped args))
+    CatchPad {..} -> "catchpad" <+> "within" <+> pp catchSwitch <+> brackets (commas (map ppTyped args)) <+> ppInstrMeta metadata
+    CleanupPad {..} -> "cleanuppad" <+> "within" <+> pp parentPad <+> brackets (commas (map ppTyped args)) <+> ppInstrMeta metadata
 
     where
       bounds True = "inbounds"
@@ -783,3 +808,7 @@ floatToWord x = runST (cast x)
 
 specialFP :: RealFloat a => a -> Bool
 specialFP f = isNaN f || f == 1 / 0 || f == - 1 / 0
+
+ppInstrMeta :: InstructionMetadata -> Doc
+ppInstrMeta [] = mempty
+ppInstrMeta xs = "," <> pp xs

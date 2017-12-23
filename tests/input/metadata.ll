@@ -4,6 +4,13 @@ define void @f2() !foo !0 !bar !{!"baz"} !qux !{!2} {
 	ret void
 }
 
+; --- [ Instruction metadata ] -------------------------------------------------
+
+define i32 @ret_3() {
+	%result = add i32 30, 12, !foo !{!"bar"}, !baz !{!"qux"}
+	ret i32 42, !foo !{!"bar"}, !baz !{!"qux"}
+}
+
 ; --- [ Metadata definitions ] -------------------------------------------------
 
 ; Empty named metadata definition.
