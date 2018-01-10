@@ -638,10 +638,13 @@ instance PP a => PP (Named a) where
 instance PP Module where
   pp Module {..} =
     let header = printf "; ModuleID = '%s'" (unShort moduleName) in
+    let target = case moduleTargetTriple of
+                      Nothing -> mempty
+                      Just target -> "target triple =" <+> dquotes (pp target) in
     let layout = case moduleDataLayout of
                       Nothing     -> mempty
                       Just layout -> "target datalayout =" <+> dquotes (pp layout) in
-    hlinecat (fromString header : layout : (fmap pp moduleDefinitions))
+    hlinecat (fromString header : (layout </> target) : (fmap pp moduleDefinitions))
 
 instance PP FP.FloatingPointPredicate where
   pp op = case op of
