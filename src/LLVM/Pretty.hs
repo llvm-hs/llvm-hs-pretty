@@ -21,7 +21,9 @@ import LLVM.AST
 import LLVM.AST.Global
 import LLVM.AST.Type
 
+import LLVM.DataLayout
 import LLVM.AST.Attribute
+import LLVM.AST.DataLayout
 import LLVM.AST.COMDAT
 import qualified LLVM.AST.Linkage as L
 import qualified LLVM.AST.Visibility as V
@@ -636,7 +638,10 @@ instance PP a => PP (Named a) where
 instance PP Module where
   pp Module {..} =
     let header = printf "; ModuleID = '%s'" (unShort moduleName) in
-    hlinecat (fromString header : (fmap pp moduleDefinitions))
+    let layout = case moduleDataLayout of
+                      Nothing     -> mempty
+                      Just layout -> "target datalayout =" <+> dquotes (pp layout) in
+    hlinecat (fromString header : layout : (fmap pp moduleDefinitions))
 
 instance PP FP.FloatingPointPredicate where
   pp op = case op of
@@ -701,6 +706,9 @@ instance PP RMW.RMWOperation where
     RMW.Min -> "min"
     RMW.UMax -> "umax"
     RMW.UMin -> "umin"
+
+instance PP DataLayout where
+  pp x = pp (BL.unpack (dataLayoutToString x))
 
 -------------------------------------------------------------------------------
 -- Special Case Hacks
