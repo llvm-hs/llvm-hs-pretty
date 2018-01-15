@@ -1,14 +1,16 @@
 name:                llvm-hs-pretty
-version:             0.1.0.0
+version:             0.2.0.0
 license:             MIT
+synopsis:            A pretty printer for LLVM IR. 
+description:         A pretty printer for the LLVM AST types provided by llvm-hs.
 license-file:        LICENSE
 author:              Stephen Diehl
 maintainer:          stephen.m.diehl@gmail.com
 build-type:          Simple
 category:            Compilers
-extra-source-files:  README.md
 cabal-version:       >=1.10
 homepage:            https://github.com/llvm-hs/llvm-hs-pretty
+extra-source-files:  README.md ChangeLog.md
 
 Synopsis: Pretty printer for LLVM IR.
 Description:
