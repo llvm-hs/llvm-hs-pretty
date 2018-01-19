@@ -798,12 +798,6 @@ ppInvoke x = error "Non-callable argument. (Malformed AST)"
 ppSingleBlock :: BasicBlock -> Doc
 ppSingleBlock (BasicBlock nm instrs term) = (vcat $ (fmap pp instrs) ++ [pp term])
 
-ppllvm :: Module -> Text
-ppllvm = displayT . renderPretty 0.4 100 . pp
-
-ppll :: PP a => a -> Text
-ppll = displayT . renderPretty 0.4 100 . pp
-
 -- According to <https://stackoverflow.com/a/7002812/3877993> this is
 -- the best way to cast floats to words.
 
@@ -823,3 +817,15 @@ specialFP f = isNaN f || f == 1 / 0 || f == - 1 / 0
 ppInstrMeta :: InstructionMetadata -> Doc
 ppInstrMeta [] = mempty
 ppInstrMeta xs = "," <> pp xs
+
+-------------------------------------------------------------------------------
+-- Toplevel
+-------------------------------------------------------------------------------
+
+-- | Pretty print a LLVM module
+ppllvm :: Module -> Text
+ppllvm = displayT . renderPretty 0.4 100 . pp
+
+-- | Pretty print a printable LLVM expression
+ppll :: PP a => a -> Text
+ppll = displayT . renderPretty 0.4 100 . pp
