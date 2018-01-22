@@ -611,7 +611,7 @@ instance PP C.Constant where
     in if packed
          then angleBrackets struct
          else struct
-  pp (C.Null {}) = "zeroinitializer"
+  pp (C.Null constantType) = ppNullInitializer constantType
   pp (C.Undef {}) = "undef"
   pp (C.TokenNone {}) = "none"
   pp (C.BlockAddress fn blk) = "blockaddress" <> parens (commas (fmap pp [fn, blk]))
@@ -760,6 +760,13 @@ ppParams ppParam (ps, varrg) = parens . commas $ fmap ppParam ps ++ vargs
 ppFunctionArgumentTypes :: Type -> Doc
 ppFunctionArgumentTypes FunctionType {..} = ppParams pp (argumentTypes, isVarArg)
 ppFunctionArgumentTypes _ = error "Non-function argument. (Malformed AST)"
+
+ppNullInitializer :: Type -> Doc
+ppNullInitializer PointerType {..} = "zeroinitializer"
+ppNullInitializer StructureType {..} = "zeroinitializer"
+ppNullInitializer FunctionType {..} = "zeroinitializer"
+ppNullInitializer ArrayType {..} = "zeroinitializer"
+ppNullInitializer _ = error "Non-pointer argument. (Malformed AST)"
 
 ppCall :: Instruction -> Doc
 ppCall Call { function = Right f,..}
