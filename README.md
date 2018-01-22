@@ -11,7 +11,7 @@ through the C++ API.
 Usage
 -----
 
-There is a single function ``ppllvm`` that maps a LLVM.AST.Module to a String.
+There is a single function ``ppllvm`` that maps a LLVM.AST.Module to a Text.
 
 ```haskell
 import LLVM.AST
@@ -37,7 +37,7 @@ printer faithfully preserves the structure. The sample modules are in
 Using stack:
 
 ```bash
-$ stac build
+$ stack build
 $ stack test
 ```
 
