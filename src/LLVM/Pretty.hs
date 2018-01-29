@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -611,7 +612,13 @@ instance PP C.Constant where
     in if packed
          then angleBrackets struct
          else struct
+
   pp (C.Null constantType) = ppNullInitializer constantType
+
+#if MIN_VERSION_llvm_hs_pure(5,1,3)
+  pp (C.AggregateZero constantType) = "zeroinitializer"
+#endif
+
   pp (C.Undef {}) = "undef"
   pp (C.TokenNone {}) = "none"
   pp (C.BlockAddress fn blk) = "blockaddress" <> parens (commas (fmap pp [fn, blk]))
