@@ -9,6 +9,7 @@
 {-# OPTIONS_GHC -fwarn-incomplete-uni-patterns #-}
 
 module LLVM.Pretty (
+  PP(..),
   ppllvm,
   ppll,
 ) where
