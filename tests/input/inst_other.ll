@@ -417,9 +417,9 @@ define void @cleanuppad() {
 
 define void @cleanupret() {
   catchpad:
-    %cs = catchswitch within none [label %catchpad] unwind to caller
-    cleanupret from %cs unwind to caller
-    cleanupret from %cs unwind label %continue
+    %cp = cleanuppad within none []
+    cleanupret from %cp unwind to caller
+    cleanupret from %cp unwind label %continue
   continue:
     ret void
 }
