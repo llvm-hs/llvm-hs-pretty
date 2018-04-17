@@ -692,7 +692,7 @@ instance PP Atomicity where
 
 instance PP SynchronizationScope where
   pp = \case
-    SingleThread -> "syncscope(\"singlethreaded\")"
+    SingleThread -> "syncscope(\"singlethread\")"
     System -> mempty
 
 instance PP MemoryOrdering where
