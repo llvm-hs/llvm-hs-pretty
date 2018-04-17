@@ -201,21 +201,24 @@ instance PP Global where
         [] ->
           ("declare" <+> pp linkage <+> pp callingConvention
             <+> pp returnAttributes <+> pp returnType <+> global (pp name)
-            <> ppParams (pp . typeOf) parameters <+> pp functionAttributes <+> align <+> gcName)
+            <> ppParams (pp . typeOf) parameters <+> pp functionAttributes <+> align <+> gcName <+> pre)
 
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
             ("define" <+> pp linkage <+> pp callingConvention
               <+> pp returnAttributes <+> pp returnType <+> global (pp name)
-              <> ppParams pp parameters <+> pp functionAttributes <+> align <+> gcName)
+              <> ppParams pp parameters <+> pp functionAttributes <+> align <+> gcName <+> pre)
             `wrapbraces` (indent 2 $ ppSingleBlock b)
 
         bs ->
           ("define" <+> pp linkage <+> pp callingConvention
             <+> pp returnAttributes <+> pp returnType <+> global (pp name)
-            <> ppParams pp parameters <+> pp functionAttributes <+> align <+> gcName)
+            <> ppParams pp parameters <+> pp functionAttributes <+> align <+> gcName <+> pre)
           `wrapbraces` (vcat $ fmap pp bs)
     where
+      pre = case prefix of
+              Nothing  -> empty
+              Just con -> "prefix" <+> ppTyped con
       align | alignment == 0    = empty
             | otherwise = "align" <+> pp alignment
       gcName = maybe empty (\n -> "gc" <+> dquotes (text $ pack n)) (fmap unShort garbageCollectorName)
