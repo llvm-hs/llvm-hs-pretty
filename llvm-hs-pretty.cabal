@@ -12,10 +12,6 @@ cabal-version:       >=1.10
 homepage:            https://github.com/llvm-hs/llvm-hs-pretty
 extra-source-files:  README.md ChangeLog.md
 
-Synopsis: Pretty printer for LLVM IR.
-Description:
-  Pretty printer for LLVM IR.
-
 Source-Repository head
     Type: git
     Location: git@github.com:llvm-hs/llvm-hs-pretty.git
