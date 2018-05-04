@@ -1,5 +1,5 @@
 name:                llvm-hs-pretty
-version:             0.2.0.0
+version:             0.2.1.0
 license:             MIT
 synopsis:            A pretty printer for LLVM IR. 
 description:         A pretty printer for the LLVM AST types provided by llvm-hs.
