@@ -10,7 +10,6 @@ import Control.Monad.Except
 import Data.Functor
 import qualified Data.Text.Lazy as T
 import qualified Data.Text.Lazy.IO as T
-import Text.Show.Pretty (ppShow)
 
 import System.IO
 import System.Exit
