@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -36,6 +37,8 @@ import qualified LLVM.AST.IntegerPredicate as IP
 import qualified LLVM.AST.AddrSpace as AS
 import qualified LLVM.AST.Float as F
 import qualified LLVM.AST.RMWOperation as RMW
+import LLVM.AST.Operand hiding (DIGLobalVariable(..), GlobalVariable, Module, NoReturn, PointerType)
+import qualified LLVM.AST.Operand as O
 import LLVM.AST.ParameterAttribute as PA
 import LLVM.AST.FunctionAttribute as FA
 
@@ -48,14 +51,15 @@ import qualified Data.ByteString.Short as SBF
 import qualified Data.ByteString.Lazy.Char8 as BF
 import Data.ByteString.Lazy (fromStrict)
 import Data.ByteString.Internal (w2c)
-import Text.PrettyPrint.Leijen.Text
+import Text.PrettyPrint.Leijen.Text hiding (column, line)
 
 import qualified Data.ByteString.Char8 as BL
 import qualified Data.ByteString.Short as BS
 import Data.Char (chr, ord, isAscii, isControl, isLetter, isDigit)
 import Data.Foldable (toList)
+import Data.Int
 import Data.List (intersperse)
-import Data.Maybe (isJust)
+import Data.Maybe (isJust, mapMaybe)
 import Numeric (showHex)
 
 import Data.Array.Unsafe
@@ -89,8 +93,8 @@ angleBrackets x = char '<' <> x <> char '>'
 spacedbraces :: Doc -> Doc
 spacedbraces x = char '{' <+> x <+> char '}'
 
-local :: Doc -> Doc
-local a = "%" <> a
+local' :: Doc -> Doc
+local' a = "%" <> a
 
 global :: Doc -> Doc
 global a = "@" <> a
@@ -126,10 +130,22 @@ short x = string (pack (unShort x))
 decodeShortUtf8 :: SBF.ShortByteString -> Text
 decodeShortUtf8 = decodeUtf8 . fromStrict . SBF.fromShort
 
+instance PP Word8 where
+  pp x = int (fromIntegral x)
+
+instance PP Word16 where
+  pp x = int (fromIntegral x)
+
 instance PP Word32 where
   pp x = int (fromIntegral x)
 
 instance PP Word64 where
+  pp x = int (fromIntegral x)
+
+instance PP Int32 where
+  pp x = int (fromIntegral x)
+
+instance PP Int64 where
   pp x = int (fromIntegral x)
 
 instance PP Integer where
@@ -140,6 +156,10 @@ instance PP BS.ShortByteString where
 
 instance PP [Char] where
   pp = text . pack
+
+instance PP Bool where
+  pp True = "true"
+  pp False = "false"
 
 instance PP Name where
   pp (Name nm)
@@ -155,7 +175,7 @@ instance PP Name where
 
 instance PP Parameter where
   pp (Parameter ty (UnName _) attrs) = pp ty <+> pp attrs
-  pp (Parameter ty name attrs) = pp ty <+> pp attrs <+> local (pp name)
+  pp (Parameter ty name attrs) = pp ty <+> pp attrs <+> local' (pp name)
 
 instance PP [ParameterAttribute] where
   pp x = hsep $ fmap pp x
@@ -245,10 +265,10 @@ ppMetadata (Just m) = pp m
 
 instance PP Definition where
   pp (GlobalDefinition x) = pp x
-  pp (TypeDefinition nm ty) = local (pp nm) <+> "=" <+> "type" <+> maybe "opaque" pp ty
+  pp (TypeDefinition nm ty) = local' (pp nm) <+> "=" <+> "type" <+> maybe "opaque" pp ty
   pp (FunctionAttributes gid attrs) = "attributes" <+> pp gid <+> "=" <+> braces (hsep (fmap ppAttrInGroup attrs))
   pp (NamedMetadataDefinition nm meta) = "!" <> short nm <+> "=" <+> "!" <> braces (commas (fmap pp meta))
-  pp (MetadataNodeDefinition node meta) = pp node <+> "=" <+> "!" <> braces (commas (fmap ppMetadata meta))
+  pp (MetadataNodeDefinition node meta) = pp node <+> "=" <+> pp meta
   pp (ModuleInlineAssembly asm) = "module asm" <+> dquotes (text (pack (BL.unpack asm)))
   pp (COMDAT name selKind) = "$" <> short name <+> "=" <+> "comdat" <+> pp selKind
 
@@ -392,7 +412,7 @@ ppLinkage omitExternal = \case
    L.WeakODR                 -> "weak_odr"
 
 instance PP InstructionMetadata where
-  pp meta = commas ["!" <> pp x <> "!" <> ("{" <> pp y <> "}") | (x,y) <- meta]
+  pp meta = commas ["!" <> pp x <+> pp y | (x,y) <- meta]
 
 instance PP MetadataNodeID where
   pp (MetadataNodeID x) = "!" <> int (fromIntegral x)
@@ -546,18 +566,419 @@ instance PP (Either GroupID FunctionAttribute) where
   pp (Right fattr) = pp fattr
 
 instance PP Operand where
-  pp (LocalReference _ nm) = local (pp nm)
+  pp (LocalReference _ nm) = local' (pp nm)
   pp (ConstantOperand con) = pp con
   pp (MetadataOperand mdata) = pp mdata
 
 instance PP Metadata where
   pp (MDString str) = "!" <> dquotes (text (decodeShortUtf8 str))
   pp (MDNode node) = pp node
-  pp (MDValue operand) = pp operand
+  pp (MDValue operand) = ppTyped operand
 
-instance PP MetadataNode where
-  pp (MetadataNode xs) = "!" <> braces (commas (fmap ppMetadata xs))
-  pp (MetadataNodeReference ref) = pp ref
+ppDINode :: [Char] -> [([Char], Maybe Doc)] -> Doc
+ppDINode name attrs = "!" <> pp name <> parens (commas (mapMaybe (\(k, mayV) -> fmap (\v -> pp k <> ":" <+> v) mayV) attrs))
+
+ppDIArray :: [Doc] -> Maybe Doc
+ppDIArray [] = Nothing
+ppDIArray xs = Just ("!" <> braces (commas xs))
+
+instance PP a => PP (MDRef a) where
+  pp (MDInline a) = pp a
+  pp (MDRef ref) = pp ref
+
+instance PP MDNode where
+  pp (MDTuple xs) = "!" <> braces (commas (map ppMetadata xs))
+  pp (DIExpression e) = pp e
+  pp (DIGlobalVariableExpression e) = pp e
+  pp (DILocation l) = pp l
+  pp (DIMacroNode m) = pp m
+  pp (DINode n) = pp n
+
+instance PP DIExpression where
+  pp (Expression os) = "!DIExpression" <> parens (commas (concatMap ppDWOp os))
+
+ppDWOp :: DWOp -> [Doc]
+ppDWOp o = case o of
+  DwOpFragment DW_OP_LLVM_Fragment {..} -> ["DW_OP_LLVM_fragment", pp offset, pp size]
+  DW_OP_StackValue -> ["DW_OP_stack_value"]
+  DW_OP_Swap -> ["DW_OP_swap"]
+  DW_OP_ConstU c -> ["DW_OP_constu", pp c]
+  DW_OP_PlusUConst c -> ["DW_OP_plus_uconst", pp c]
+  DW_OP_Plus -> ["DW_OP_plus"]
+  DW_OP_Minus -> ["DW_OP_minus"]
+  DW_OP_Mul -> ["DW_OP_mul"]
+  DW_OP_Deref -> ["DW_OP_deref"]
+  DW_OP_XDeref -> ["DW_OP_xderef"]
+
+instance PP DIGlobalVariableExpression where
+  pp e = ppDINode "DIGlobalVariableExpression"
+    [ ("var", Just (pp (var e)))
+    , ("expr", Just (pp (expr e)))
+    ]
+
+instance PP DILocation where
+  pp (Location line col scope) =
+    ppDINode "DILocation" [("line", Just (pp line)), ("column", Just (pp col)), ("scope", Just (pp scope))]
+
+instance PP DIMacroNode where
+  pp DIMacro {..} = ppDINode "DIMacro"
+    [("type", Just (pp info)), ("line", Just (pp line)), ("name", ppSbs name), ("value", ppSbs value)]
+  pp DIMacroFile {..} = ppDINode "DIMacroFile"
+    [ ("line", Just (pp line))
+    , ("file", Just (pp file))
+    , ("nodes", ppDIArray (map pp elements))
+    ]
+
+instance PP DIMacroInfo where
+  pp Define = "DW_MACINFO_define"
+  pp Undef = "DW_MACINFO_undef"
+
+instance PP DINode where
+  pp (DIEnumerator e) = pp e
+  pp (DIImportedEntity e) = pp e
+  pp (DIObjCProperty p) = pp p
+  pp (DIScope s) = pp s
+  pp (DISubrange r) = pp r
+  pp (DITemplateParameter p) = pp p
+  pp (DIVariable v) = pp v
+
+instance PP DILocalScope where
+  pp (DILexicalBlockBase b) = pp b
+  pp (DISubprogram p) = pp p
+
+instance PP DIEnumerator where
+  pp (Enumerator val name) = ppDINode "DIEnumerator" [("name", ppSbs name), ("value", Just (pp val))]
+
+instance PP DIImportedEntity where
+  pp ImportedEntity {..} = ppDINode "DIImportedEntity"
+    [ ("tag", Just (pp tag))
+    , ("scope", Just (pp scope))
+    , ("name", ppSbs name)
+    , ("entity", fmap pp entity)
+    , ("file", fmap pp file)
+    , ("line", Just (pp line))
+    ]
+
+instance PP ImportedEntityTag where
+  pp ImportedModule = "DW_TAG_imported_module"
+  pp ImportedDeclaration = "DW_TAG_imported_declaration"
+
+instance PP DIObjCProperty where
+  pp ObjCProperty {..} = ppDINode "DIObjCProperty"
+    [ ("name", ppSbs name)
+    , ("file", fmap pp file)
+    , ("line", Just (pp line))
+    , ("setter", ppSbs getterName)
+    , ("getter", ppSbs setterName)
+    , ("attributes", Just (pp attributes))
+    , ("type", fmap pp type')
+    ]
+
+instance PP DIScope where
+  pp (DICompileUnit cu) = pp cu
+  pp (DIFile f) = pp f
+  pp (DILocalScope s) = pp s
+  pp (DIModule m) = pp m
+  pp (DINamespace ns) = pp ns
+  pp (DIType t) = pp t
+
+instance PP DISubrange where
+  pp Subrange {..} = ppDINode "DISubrange" [("count", Just (pp count)), ("lowerBound", Just (pp lowerBound))]
+
+instance PP DITemplateParameter where
+  pp DITemplateTypeParameter {..} = ppDINode "DITemplateTypeParameter"
+    [ ("name", ppSbs name), ("type", Just (pp type')) ]
+  pp DITemplateValueParameter {..} = ppDINode "DITemplateValueParameter"
+   [ ("tag", ppTemplateValueParameterTag tag)
+   , ("name", ppSbs name)
+   , ("type", Just (pp type'))
+   , ("value", Just (pp value))
+   ]
+
+ppTemplateValueParameterTag :: TemplateValueParameterTag -> Maybe Doc
+ppTemplateValueParameterTag TemplateValueParameter = Nothing
+ppTemplateValueParameterTag GNUTemplateTemplateParam = Just "DW_TAG_GNU_template_template_param"
+ppTemplateValueParameterTag GNUTemplateParameterPack = Just "DW_TAG_GNU_template_parameter_pack"
+
+instance PP DIVariable where
+  pp (DIGlobalVariable v) = pp v
+  pp (DILocalVariable v) = pp v
+
+instance PP DICompileUnit where
+  pp cu@CompileUnit {..} = "distinct" <+> ppDINode "DICompileUnit"
+    [ ("language", Just (pp language))
+    , ("file", Just (pp file))
+    , ("producer", ppSbs producer)
+    , ("isOptimized", Just (pp optimized))
+    , ("flags", ppSbs flags)
+    , ("runtimeVersion", Just (pp runtimeVersion))
+    , ("splitDebugFileName", ppSbs splitDebugFileName)
+    , ("emissionKind", Just (pp emissionKind))
+    , ("enums", ppDIArray (map pp enums))
+    , ("retainedTypes", ppDIArray (map ppEither retainedTypes))
+    , ("globals", ppDIArray (map pp globals))
+    , ("imports", ppDIArray (map pp imports))
+    , ("macros", ppDIArray (map pp macros))
+    , ("dwoId", Just (pp dWOId))
+    , ("splitDebugInlining", Just (pp splitDebugInlining))
+    , ("debugInfoForProfiling", Just (pp debugInfoForProfiling))
+    , ("gnuPubnames", Just (pp gnuPubnames))
+    ]
+
+instance PP DebugEmissionKind where
+  pp NoDebug = "NoDebug"
+  pp FullDebug = "FullDebug"
+  pp LineTablesOnly = "LineTablesOnly"
+
+instance PP DIFile where
+  pp (File {..}) = ppDINode "DIFile" $
+    [ ("filename", Just (dquotes (pp filename)))
+    , ("directory", Just (dquotes (pp directory)))
+    , ("checksum", ppSbs checksum)
+    , ("checksumkind", Just (pp checksumKind))
+    ]
+
+instance PP DIModule where
+  pp O.Module {..} = ppDINode "DIModule"
+    [ ("scope", Just (maybe "null" pp scope))
+    , ("name", ppSbs name)
+    , ("configMacros", ppSbs configurationMacros)
+    , ("includePath", ppSbs includePath)
+    , ("isysroot", ppSbs isysRoot)
+    ]
+
+instance PP DINamespace where
+  pp Namespace {..} = ppDINode "DINamespace"
+    [ ("name", ppSbs name)
+    , ("scope", Just (maybe "null" pp scope))
+    , ("exportSymbols", Just (pp exportSymbols))
+    ]
+
+instance PP DIType where
+  pp (DIBasicType t) = pp t
+  pp (DICompositeType t) = pp t
+  pp (DIDerivedType t) = pp t
+  pp (DISubroutineType t) = pp t
+
+instance PP DILexicalBlockBase where
+  pp DILexicalBlock {..} = ppDINode "DILexicalBlock"
+    [ ("scope", Just (pp scope))
+    , ("file", fmap pp file)
+    , ("line", Just (pp line))
+    , ("column", Just (pp column))
+    ]
+  pp DILexicalBlockFile {..} = ppDINode "DILexicalBlockFile"
+    [ ("scope", Just (pp scope)), ("file", fmap pp file), ("discriminator", Just (pp discriminator)) ]
+
+ppSbs :: BS.ShortByteString -> Maybe Doc
+ppSbs s
+  | SBF.null s = Nothing
+  | otherwise = Just (dquotes (pp s))
+
+instance PP DISubprogram where
+  pp Subprogram {..} = ppMaybe (if definition then Just ("distinct " :: [Char]) else Nothing) <>
+   ppDINode "DISubprogram"
+   [ ("name", ppSbs name)
+   , ("linkageName", ppSbs linkageName)
+   , ("scope", fmap pp scope)
+   , ("file", fmap pp file)
+   , ("line", Just (pp line))
+   , ("type", fmap pp type')
+   , ("isLocal", Just (pp localToUnit))
+   , ("isDefinition", Just (pp definition))
+   , ("scopeLine", Just (pp scopeLine))
+   , ("containingType", fmap pp containingType)
+   , ("virtuality", ppVirtuality virtuality)
+   , ("virtualIndex", Just (pp virtualityIndex))
+   , ("thisAdjustment", Just (pp thisAdjustment))
+   , ("flags", ppDIFlags flags)
+   , ("isOptimized", Just (pp optimized))
+   , ("unit", fmap pp unit)
+   , ("templateParams", ppDIArray (map pp templateParams))
+   , ("declaration", fmap pp declaration)
+   , ("variables", ppDIArray (map pp variables))
+   , ("thrownTypes", ppDIArray (map pp thrownTypes))
+   ]
+
+ppVirtuality :: Virtuality -> Maybe Doc
+ppVirtuality NoVirtuality = Nothing
+ppVirtuality Virtual = Just "DW_VIRTUALITY_virtual"
+ppVirtuality PureVirtual = Just "DW_VIRTUALITY_pure_virtual"
+
+instance PP ChecksumKind where
+  pp None = "CSK_None"
+  pp MD5 = "CSK_MD5"
+  pp SHA1 = "CSK_SHA1"
+
+instance PP DIBasicType where
+  pp (BasicType {..}) = ppDINode "DIBasicType"
+    [ ("tag", Just (pp tag))
+    , ("name", ppSbs name)
+    , ("size", Just (pp sizeInBits))
+    , ("align", Just (pp alignInBits))
+    , ("encoding", fmap pp encoding)
+    ]
+
+instance PP BasicTypeTag where
+  pp BaseType = "DW_TAG_base_type"
+  pp UnspecifiedType = "DW_TAG_unspecified_type"
+
+instance PP Encoding where
+  pp e = case e of
+    AddressEncoding -> "DW_ATE_address"
+    BooleanEncoding -> "DW_ATE_boolean"
+    FloatEncoding -> "DW_ATE_float"
+    SignedEncoding -> "DW_ATE_signed"
+    SignedCharEncoding -> "DW_ATE_signed_char"
+    UnsignedEncoding -> "DW_ATE_unsigned"
+    UnsignedCharEncoding -> "DW_ATE_unsigned_char"
+
+ppDIFlags :: [DIFlag] -> Maybe Doc
+ppDIFlags [] = Nothing
+ppDIFlags flags = Just (hsep (punctuate (char '|') (map pp flags)))
+
+instance PP DIFlag where
+  pp flag = "DIFlag" <> fromString (flagName flag)
+    where
+      flagName (Accessibility f) = show f
+      flagName (InheritanceFlag f) = show f
+      flagName VirtualFlag = "Virtual"
+      flagName f = show f
+
+
+ppEither :: (PP a, PP b) => MDRef (Either a b) -> Doc
+ppEither (MDRef r) = pp r
+ppEither (MDInline e) = either pp pp e
+
+instance PP DICompositeType where
+  pp DIArrayType {..} = ppDINode "DICompositeType"
+    [ ("tag", Just "DW_TAG_array_type")
+    , ("elements", ppDIArray (map pp subscripts))
+    , ("baseType", fmap pp elementTy)
+    , ("size", Just (pp sizeInBits))
+    , ("align", Just (pp alignInBits))
+    , ("flags", ppDIFlags flags)
+    ]
+  pp DIClassType {..} = ppDINode "DICompositeType"
+    [ ("tag", Just "DW_TAG_class_type")
+    , ("scope", fmap pp scope)
+    , ("name", ppSbs name)
+    , ("file", fmap pp file)
+    , ("line", Just (pp line))
+    , ("flags", ppDIFlags flags)
+    , ("baseType", fmap pp derivedFrom)
+    , ("elements", ppDIArray (map ppEither elements))
+    , ("vtableHolder", fmap pp vtableHolder)
+    , ("templateParams", ppDIArray (map pp templateParams))
+    , ("identifier", ppSbs identifier)
+    , ("size", Just (pp sizeInBits))
+    , ("align", Just (pp alignInBits))
+    ]
+  pp DIEnumerationType {..} = ppDINode "DICompositeType"
+    [ ("tag", Just "DW_TAG_enumeration_type")
+    , ("name", ppSbs name)
+    , ("file", fmap pp file)
+    , ("line", Just (pp line))
+    , ("size", Just (pp sizeInBits))
+    , ("align", Just (pp alignInBits))
+    , ("elements", Just ("!" <> braces (commas (map pp values))))
+    , ("scope", fmap pp scope)
+    , ("identifier", ppSbs identifier)
+    , ("baseType", fmap pp baseType)
+    ]
+  pp DIStructureType {..} = ppDINode "DICompositeType"
+    [ ("tag", Just "DW_TAG_structure_type")
+    , ("scope", fmap pp scope)
+    , ("name", ppSbs name)
+    , ("file", fmap pp file)
+    , ("line", Just (pp line))
+    , ("flags", ppDIFlags flags)
+    , ("baseType", fmap pp derivedFrom)
+    , ("elements", ppDIArray (map ppEither elements))
+    , ("runtimeLang", Just (pp runtimeLang))
+    , ("vtableHolder", fmap pp vtableHolder)
+    , ("identifier", ppSbs identifier)
+    , ("size", Just (pp sizeInBits))
+    , ("align", Just (pp alignInBits))
+    ]
+  pp DIUnionType {..} = ppDINode "DICompositeType"
+    [ ("tag", Just "DW_TAG_union_type")
+    , ("name", ppSbs name)
+    , ("file", fmap pp file)
+    , ("line", Just (pp line))
+    , ("flags", ppDIFlags flags)
+    , ("elements", ppDIArray (map ppEither elements))
+    , ("runtimeLang", Just (pp runtimeLang))
+    , ("identifier", ppSbs identifier)
+    , ("size", Just (pp sizeInBits))
+    , ("align", Just (pp alignInBits))
+    ]
+
+instance PP DIDerivedType where
+  pp DerivedType {..} = ppDINode "DIDerivedType"
+    [ ("tag", Just (pp tag))
+    , ("name", ppSbs name)
+    , ("file", fmap pp file)
+    , ("line", Just (pp line))
+    , ("scope", fmap pp scope)
+    , ("baseType", Just (pp baseType))
+    , ("size", Just (pp sizeInBits))
+    , ("align", Just (pp alignInBits))
+    , ("offset", Just (pp offsetInBits))
+    , ("flags", ppDIFlags flags)
+    , ("dwarfAddressSpace", fmap pp addressSpace)
+    ]
+
+instance PP DerivedTypeTag where
+  pp t =
+    case t of
+      Typedef -> "DW_TAG_typedef"
+      O.PointerType -> "DW_TAG_pointer_type"
+      PtrToMemberType -> "DW_TAG_ptr_to_member_type"
+      ReferenceType -> "DW_TAG_reference_type"
+      RValueReferenceType -> "DW_TAG_rvalue_reference_type"
+      ConstType -> "DW_TAG_const_type"
+      VolatileType -> "DW_TAG_volatile_type"
+      RestrictType -> "DW_TAG_restrict_type"
+      AtomicType -> "DW_TAG_atomic_type"
+      Member -> "DW_TAG_member"
+      Inheritance -> "DW_TAG_inheritance"
+      Friend -> "DW_TAG_friend"
+
+instance PP DISubroutineType where
+  pp SubroutineType {..} = ppDINode "DISubroutineType"
+    [ ("flags", ppDIFlags flags)
+    , ("cc", Just (pp cc))
+    , ("types", Just ("!" <> braces (commas (map ppTy typeArray))))
+    ]
+    where ppTy Nothing = "null"
+          ppTy (Just t) = pp t
+
+instance PP DIGlobalVariable where
+  pp O.GlobalVariable {..} = ppDINode "DIGlobalVariable"
+    [ ("name", ppSbs name)
+    , ("scope", fmap pp scope)
+    , ("linkageName", ppSbs linkageName)
+    , ("file", fmap pp file)
+    , ("line", Just (pp line))
+    , ("type", fmap pp type')
+    , ("isLocal", Just (pp local))
+    , ("isDefinition", Just (pp definition))
+    , ("declaration", fmap pp staticDataMemberDeclaration)
+    , ("align", Just (pp alignInBits))
+    ]
+
+instance PP DILocalVariable where
+  pp LocalVariable {..} = ppDINode "DILocalVariable"
+    [ ("name", ppSbs name)
+    , ("scope", Just (pp scope))
+    , ("file", fmap pp file)
+    , ("line", Just (pp line))
+    , ("type", fmap pp type')
+    , ("flags", ppDIFlags flags)
+    , ("arg", Just (pp arg))
+    , ("align", Just (pp alignInBits))
+    ]
 
 instance PP C.Constant where
   pp (C.Int width val) = pp val
@@ -761,7 +1182,7 @@ ppCommaTyped :: (PP a, Typed a) => a -> Doc
 ppCommaTyped a = pp (typeOf a) `cma` pp a
 
 phiIncoming :: (Operand, Name) -> Doc
-phiIncoming (op, nm) = brackets (pp op `cma` (local (pp nm)))
+phiIncoming (op, nm) = brackets (pp op `cma` (local' (pp nm)))
 
 ppParams :: (a -> Doc) -> ([a], Bool) -> Doc
 ppParams ppParam (ps, varrg) = parens . commas $ fmap ppParam ps ++ vargs
