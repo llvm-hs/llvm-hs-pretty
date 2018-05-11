@@ -46,6 +46,7 @@ testPath = "tests/input/"
 suite :: IO TestTree
 suite = do
   dirFiles <- listDirectory testPath
+  createDirectoryIfMissing True "tests/output"
   let testFiles = fmap (\x -> testPath </> x) dirFiles
   pure $ testGroup "Test Suite" [
     testGroup "Roundtrip Tests" $ fmap makeTest testFiles
