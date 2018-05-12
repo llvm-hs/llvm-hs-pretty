@@ -10,7 +10,7 @@ build-type:          Simple
 category:            Compilers
 cabal-version:       >=1.10
 homepage:            https://github.com/llvm-hs/llvm-hs-pretty
-extra-source-files:  README.md ChangeLog.md
+extra-source-files:  README.md ChangeLog.md tests/input/*.ll
 
 Source-Repository head
     Type: git

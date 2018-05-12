@@ -51,7 +51,7 @@ import qualified Data.ByteString.Short as SBF
 import qualified Data.ByteString.Lazy.Char8 as BF
 import Data.ByteString.Lazy (fromStrict)
 import Data.ByteString.Internal (w2c)
-import Text.PrettyPrint.Leijen.Text hiding (column, line)
+import Text.PrettyPrint.Leijen.Text hiding (column, line, (<>))
 
 import qualified Data.ByteString.Char8 as BL
 import qualified Data.ByteString.Short as BS
@@ -60,6 +60,7 @@ import Data.Foldable (toList)
 import Data.Int
 import Data.List (intersperse)
 import Data.Maybe (isJust, mapMaybe)
+import Data.Monoid ((<>))
 import Numeric (showHex)
 
 import Data.Array.Unsafe
