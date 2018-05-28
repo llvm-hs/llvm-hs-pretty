@@ -34,6 +34,7 @@ import qualified LLVM.AST.CallingConvention as CC
 import qualified LLVM.AST.Constant as C
 import qualified LLVM.AST.FloatingPointPredicate as FP
 import qualified LLVM.AST.IntegerPredicate as IP
+import qualified LLVM.AST.InlineAssembly as IA
 import qualified LLVM.AST.AddrSpace as AS
 import qualified LLVM.AST.Float as F
 import qualified LLVM.AST.RMWOperation as RMW
@@ -1218,6 +1219,22 @@ ppCall Call { function = Right f,..}
         Just MustTail -> "musttail"
         Just NoTail -> "notail"
         Nothing -> empty
+ppCall Call { function = Left (IA.InlineAssembly {..}), ..}
+  = tail <+> "call" <+> pp callingConvention <+> pp returnAttributes <+> pp type'
+    <+> "asm" <+> sideeffect' <+> align' <+> dialect' <+> dquotes (text (pack (BL.unpack assembly))) <> ","
+    <+> dquotes (pp constraints) <> parens (commas $ fmap pp arguments) <+> pp functionAttributes
+    where
+      tail = case tailCallKind of
+        Just Tail -> "tail"
+        Just MustTail -> "musttail"
+        Just NoTail -> "notail"
+        Nothing -> empty
+      -- If multiple keywords appear the ‘sideeffect‘ keyword must come first,
+      -- the ‘alignstack‘ keyword second and the ‘inteldialect‘ keyword last.
+      sideeffect' = if hasSideEffects then "sideeffect" else ""
+      align' = if alignStack then "alignstack" else ""
+      -- ATTDialect is assumed if not specified
+      dialect' = case dialect of IA.ATTDialect -> ""; IA.IntelDialect -> "inteldialect"
 ppCall x = error "Non-callable argument. (Malformed AST)"
 
 -- Differs from Call in record name conventions only so needs a seperate almost
