@@ -20,6 +20,10 @@ import LLVM.Pretty (ppllvm)
 ppllvm :: Module -> Text
 ```
 
+Individual LLVM elements (constants, instructions) can be printed using the
+the polymorphic ``ppll`` function for any LLVM structure that implements the
+``PP`` typeclass.
+
 Tests
 -----
 
@@ -144,5 +148,5 @@ License
 
 Released under the MIT License.
 
-Copyright (c) 2014-2017, Stephen Diehl
+Copyright (c) 2014-2018, Stephen Diehl
 Copyright (c) 2015 Cedric Shock
