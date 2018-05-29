@@ -318,6 +318,7 @@ instance PP FunctionAttribute where
    SanitizeAddress     -> "sanitize_address"
    SanitizeThread      -> "sanitize_thread"
    SanitizeMemory      -> "sanitize_memory"
+   SanitizeHWAddress   -> "sanitize_hwaddress"
    NoRecurse           -> "norecurse"
    Convergent          -> "convergent"
    ArgMemOnly          -> "argmemonly"
@@ -327,6 +328,7 @@ instance PP FunctionAttribute where
    InaccessibleMemOrArgMemOnly -> "inaccessiblemem_or_argmemonly"
    FA.StringAttribute k v -> dquotes (short k) <> "=" <> dquotes (short v)
    Speculatable        -> "speculatable"
+   StrictFP            -> "strictfp"
 
 instance PP ParameterAttribute where
   pp = \case
@@ -1064,6 +1066,7 @@ instance PP C.Constant where
   pp C.PtrToInt {..} = "ptrtoint" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
   pp C.IntToPtr {..} = "inttoptr" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
   pp C.AddrSpaceCast {..} = "addrspacecast" <+> parens (ppTyped operand0 <+> "to" <+> pp type')
+  pp _ = error "Non-function argument. (Malformed AST)"
 
 instance PP a => PP (Named a) where
   pp (nm := a) = "%" <> pp nm <+> "=" <+> pp a
