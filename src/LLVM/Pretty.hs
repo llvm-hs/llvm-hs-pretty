@@ -500,7 +500,13 @@ instance PP Instruction where
       `cma` pp operand1
       <+> ppInstrMeta metadata
 
-    Shl {..}    -> "shl"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    Shl {..}    -> "shl"
+      <+> ppBool "nuw" nuw
+      <+> ppBool "nsw" nsw
+      <+> ppTyped operand0
+      `cma` pp operand1
+      <+> ppInstrMeta metadata
+
     AShr {..}   -> "ashr" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
     LShr {..}   -> "lshr" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
     And {..}    -> "and"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
