@@ -513,7 +513,12 @@ instance PP Instruction where
       `cma` pp operand1
       <+> ppInstrMeta metadata
 
-    LShr {..}   -> "lshr" <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    LShr {..}   -> "lshr"
+      <+> ppBool "exact" exact
+      <+> ppTyped operand0
+      `cma` pp operand1
+      <+> ppInstrMeta metadata
+
     And {..}    -> "and"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
     Or {..}     -> "or"   <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
     Xor {..}    -> "xor"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
