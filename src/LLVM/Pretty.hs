@@ -504,7 +504,7 @@ instance PP Instruction where
       where num   = case numElements of Nothing -> empty
                                         Just o -> "," <+> ppTyped o
     Store {..}  -> "store" <+> ppTyped value `cma` ppTyped address <> ppAlign alignment
-    Load {..}   -> "load" <+> pp argTy `cma` ppTyped address <> ppAlign alignment <+> ppInstrMeta metadata
+    Load {..}   -> "load" <+> ppVolatile volatile <+> pp argTy `cma` ppTyped address <> ppAlign alignment <+> ppInstrMeta metadata
       where PointerType argTy _ = typeOf address
     Phi {..}    -> "phi" <+> pp type' <+> commas (fmap phiIncoming incomingValues) <+> ppInstrMeta metadata
 
