@@ -544,8 +544,7 @@ instance PP Instruction where
     VAArg {..} -> "va_arg" <+> ppTyped argList `cma` pp type' <+> ppInstrMeta metadata
 
     LandingPad {..} ->
-      "landingpad" <+> pp type' <+> ppBool "cleanup" cleanup <+> ppInstrMeta metadata
-      <+> commas (fmap pp clauses)
+      "landingpad" <+> pp type' <+> ppBool "cleanup" cleanup <+> commas (fmap pp clauses) <+> ppInstrMeta metadata
     CatchPad {..} -> "catchpad" <+> "within" <+> pp catchSwitch <+> brackets (commas (map ppTyped args)) <+> ppInstrMeta metadata
     CleanupPad {..} -> "cleanuppad" <+> "within" <+> pp parentPad <+> brackets (commas (map ppTyped args)) <+> ppInstrMeta metadata
 
