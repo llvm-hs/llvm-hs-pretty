@@ -479,7 +479,13 @@ instance PP Terminator where
 
 instance PP Instruction where
   pp = \case
-    Add {..}    -> "add"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    Add {..}    -> "add"
+      <+> ppBool "nuw" nuw
+      <+> ppBool "nsw" nsw
+      <+> ppTyped operand0
+      `cma` pp operand1
+      <+> ppInstrMeta metadata
+
     Sub {..}    -> "sub"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
     Mul {..}    -> "mul"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
     Shl {..}    -> "shl"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
