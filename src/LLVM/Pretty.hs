@@ -480,41 +480,37 @@ instance PP Terminator where
 instance PP Instruction where
   pp = \case
     Add {..}    -> "add"
-      <+> ppBool "nuw" nuw
-      <+> ppBool "nsw" nsw
+      <+> ppNuwAndNsw nuw nsw
       <+> ppTyped operand0
       `cma` pp operand1
       <+> ppInstrMeta metadata
 
     Sub {..}    -> "sub"
-      <+> ppBool "nuw" nuw
-      <+> ppBool "nsw" nsw
+      <+> ppNuwAndNsw nuw nsw
       <+> ppTyped operand0
       `cma` pp operand1
       <+> ppInstrMeta metadata
 
     Mul {..}    -> "mul"
-      <+> ppBool "nuw" nuw
-      <+> ppBool "nsw" nsw
+      <+> ppNuwAndNsw nuw nsw
       <+> ppTyped operand0
       `cma` pp operand1
       <+> ppInstrMeta metadata
 
     Shl {..}    -> "shl"
-      <+> ppBool "nuw" nuw
-      <+> ppBool "nsw" nsw
+      <+> ppNuwAndNsw nuw nsw
       <+> ppTyped operand0
       `cma` pp operand1
       <+> ppInstrMeta metadata
 
     AShr {..}   -> "ashr"
-      <+> ppBool "exact" exact
+      <+> ppExactFlag exact
       <+> ppTyped operand0
       `cma` pp operand1
       <+> ppInstrMeta metadata
 
     LShr {..}   -> "lshr"
-      <+> ppBool "exact" exact
+      <+> ppExactFlag exact
       <+> ppTyped operand0
       `cma` pp operand1
       <+> ppInstrMeta metadata
@@ -523,13 +519,13 @@ instance PP Instruction where
     Or {..}     -> "or"   <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
     Xor {..}    -> "xor"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
     SDiv {..}   -> "sdiv"
-      <+> ppBool "exact" exact
+      <+> ppExactFlag exact
       <+> ppTyped operand0
       `cma` pp operand1
       <+> ppInstrMeta metadata
 
     UDiv {..}   -> "udiv"
-      <+> ppBool "exact" exact
+      <+> ppExactFlag exact
       <+> ppTyped operand0
       `cma` pp operand1
       <+> ppInstrMeta metadata
@@ -596,6 +592,9 @@ instance PP Instruction where
     where
       bounds True = "inbounds"
       bounds False = empty
+
+      ppNuwAndNsw nuw nsw = ppBool "nuw" nuw <+> ppBool "nsw" nsw
+      ppExactFlag exact = ppBool "exact" exact
 
 instance PP CallableOperand where
   pp (Left asm) = error "CallableOperand"
