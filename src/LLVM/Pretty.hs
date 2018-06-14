@@ -479,56 +479,18 @@ instance PP Terminator where
 
 instance PP Instruction where
   pp = \case
-    Add {..}    -> "add"
-      <+> ppNuwAndNsw nuw nsw
-      <+> ppTyped operand0
-      `cma` pp operand1
-      <+> ppInstrMeta metadata
-
-    Sub {..}    -> "sub"
-      <+> ppNuwAndNsw nuw nsw
-      <+> ppTyped operand0
-      `cma` pp operand1
-      <+> ppInstrMeta metadata
-
-    Mul {..}    -> "mul"
-      <+> ppNuwAndNsw nuw nsw
-      <+> ppTyped operand0
-      `cma` pp operand1
-      <+> ppInstrMeta metadata
-
-    Shl {..}    -> "shl"
-      <+> ppNuwAndNsw nuw nsw
-      <+> ppTyped operand0
-      `cma` pp operand1
-      <+> ppInstrMeta metadata
-
-    AShr {..}   -> "ashr"
-      <+> ppExactFlag exact
-      <+> ppTyped operand0
-      `cma` pp operand1
-      <+> ppInstrMeta metadata
-
-    LShr {..}   -> "lshr"
-      <+> ppExactFlag exact
-      <+> ppTyped operand0
-      `cma` pp operand1
-      <+> ppInstrMeta metadata
+    Add {..}    -> ppInstrWithNuwNsw "add" nuw nsw operand0 operand1 metadata
+    Sub {..}    -> ppInstrWithNuwNsw "sub" nuw nsw operand0 operand1 metadata
+    Mul {..}    -> ppInstrWithNuwNsw "mul" nuw nsw operand0 operand1 metadata
+    Shl {..}    -> ppInstrWithNuwNsw "shl" nuw nsw operand0 operand1 metadata
+    AShr {..}   -> ppInstrWithExact "ashr" exact operand0 operand1 metadata
+    LShr {..}   -> ppInstrWithExact "lshr" exact operand0 operand1 metadata
 
     And {..}    -> "and"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
     Or {..}     -> "or"   <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
     Xor {..}    -> "xor"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
-    SDiv {..}   -> "sdiv"
-      <+> ppExactFlag exact
-      <+> ppTyped operand0
-      `cma` pp operand1
-      <+> ppInstrMeta metadata
-
-    UDiv {..}   -> "udiv"
-      <+> ppExactFlag exact
-      <+> ppTyped operand0
-      `cma` pp operand1
-      <+> ppInstrMeta metadata
+    SDiv {..}   -> ppInstrWithExact "sdiv" exact operand0 operand1 metadata
+    UDiv {..}   -> ppInstrWithExact "udiv" exact operand0 operand1 metadata
 
     SRem {..}   -> "srem"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
     URem {..}   -> "urem"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
@@ -593,8 +555,22 @@ instance PP Instruction where
       bounds True = "inbounds"
       bounds False = empty
 
-      ppNuwAndNsw nuw nsw = ppBool "nuw" nuw <+> ppBool "nsw" nsw
-      ppExactFlag exact = ppBool "exact" exact
+      ppInstrWithNuwNsw :: Doc -> Bool -> Bool -> Operand -> Operand -> InstructionMetadata -> Doc
+      ppInstrWithNuwNsw name nuw nsw op1 op2 metadata =
+        name
+        <+> ppBool "nuw" nuw
+        <+> ppBool "nsw" nsw
+        <+> ppTyped op1
+        `cma` pp op2
+        <+> ppInstrMeta metadata
+
+      ppInstrWithExact :: Doc -> Bool -> Operand -> Operand -> InstructionMetadata -> Doc
+      ppInstrWithExact name exact op1 op2 metadata =
+        name
+        <+> ppBool "exact" exact
+        <+> ppTyped op1
+        `cma` pp op2
+        <+> ppInstrMeta metadata
 
 instance PP CallableOperand where
   pp (Left asm) = error "CallableOperand"
