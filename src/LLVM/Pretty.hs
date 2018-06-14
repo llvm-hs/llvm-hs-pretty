@@ -506,7 +506,12 @@ instance PP Instruction where
     And {..}    -> "and"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
     Or {..}     -> "or"   <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
     Xor {..}    -> "xor"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
-    SDiv {..}   -> "sdiv"  <+> ppTyped operand0 `cma` pp operand1 <+> ppInstrMeta metadata
+    SDiv {..}   -> "sdiv"
+      <+> ppBool "exact" exact
+      <+> ppTyped operand0
+      `cma` pp operand1
+      <+> ppInstrMeta metadata
+
     UDiv {..}   -> "udiv"
       <+> ppBool "exact" exact
       <+> ppTyped operand0
