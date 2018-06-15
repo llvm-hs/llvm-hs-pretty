@@ -162,16 +162,13 @@ instance Pretty BS.ShortByteString where
 -- instance Pretty [Char] where
 --   pretty = text . pack
 
-newtype PrettyBool = PrettyBool Bool
-
-instance Pretty PrettyBool where
-  pretty (PrettyBool True) = "true"
-  pretty (PrettyBool False) = "false"
-
 -- instance Pretty Bool where
 --   pretty True = "true"
 --   pretty False = "false"
 
+ppBoolean :: Bool -> Doc ann
+ppBoolean True = "true"
+ppBoolean False = "false"
 
 instance Pretty Name where
   pretty (Name nm)
@@ -186,8 +183,11 @@ instance Pretty Name where
   pretty (UnName x) = pretty ( (fromIntegral x) :: Int)
 
 instance Pretty Parameter where
-  pretty (Parameter ty (UnName _) attrs) = pretty ty <+> pretty attrs
-  pretty (Parameter ty name attrs) = pretty ty <+> pretty attrs <+> local' (pretty name)
+  pretty (Parameter ty (UnName _) attrs) = pretty ty <+> ppParamAttributes attrs
+  pretty (Parameter ty name attrs) = pretty ty <+> ppParamAttributes attrs <+> local' (pretty name)
+
+ppParamAttributes :: [ParameterAttribute] -> Doc ann
+ppParamAttributes pas = hsep $ fmap pretty pas
 
 -- TODO: Auto instance
 -- instance Pretty [ParameterAttribute] where
@@ -199,6 +199,9 @@ instance Pretty Parameter where
 
 -- instance Pretty (Operand, [ParameterAttribute]) where
 --   pretty (op, attrs) = pretty (typeOf op) <+> pretty attrs <+> pretty op
+
+ppArguments :: (Operand, [ParameterAttribute]) -> Doc ann
+ppArguments (op, attrs) = pretty (typeOf op) <+> ppParamAttributes attrs <+> pretty op
 
 instance Pretty UnnamedAddr where
   pretty LocalAddr = "local_unnamed_addr"
@@ -233,20 +236,20 @@ instance Pretty Global where
       case basicBlocks of
         [] ->
           ("declare" <+> pretty linkage <+> pretty callingConvention
-            <+> pretty returnAttributes <+> pretty returnType <+> global (pretty name)
-            <> ppParams (pretty . typeOf) parameters <+> pretty functionAttributes <+> align <+> gcName <+> pre)
+            <+> ppReturnAttributes returnAttributes <+> pretty returnType <+> global (pretty name)
+            <> ppParams (pretty . typeOf) parameters <+> ppFunctionAttributes functionAttributes <+> align <+> gcName <+> pre)
 
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
             ("define" <+> pretty linkage <+> pretty callingConvention
-              <+> pretty returnAttributes <+> pretty returnType <+> global (pretty name)
-              <> ppParams pretty parameters <+> pretty functionAttributes <+> align <+> gcName <+> pre)
+              <+> ppReturnAttributes returnAttributes <+> pretty returnType <+> global (pretty name)
+              <> ppParams pretty parameters <+> ppFunctionAttributes functionAttributes <+> align <+> gcName <+> pre)
             `wrapbraces` (indent 2 $ ppSingleBlock b)
 
         bs ->
           ("define" <+> pretty linkage <+> pretty callingConvention
-            <+> pretty returnAttributes <+> pretty returnType <+> global (pretty name)
-            <> ppParams pretty parameters <+> pretty functionAttributes <+> align <+> gcName <+> pre)
+            <+> ppReturnAttributes returnAttributes <+> pretty returnType <+> global (pretty name)
+            <> ppParams pretty parameters <+> ppFunctionAttributes functionAttributes <+> align <+> gcName <+> pre)
           `wrapbraces` (vcat $ fmap pretty bs)
     where
       pre = case prefix of
@@ -271,6 +274,13 @@ instance Pretty Global where
   pretty GlobalAlias {..} = global (pretty name) <+> "=" <+> pretty linkage <+> ppMaybe unnamedAddr <+> "alias" <+> pretty typ `cma` ppTyped aliasee
     where
       typ = getElementType type'
+
+ppFunctionAttribute :: Either GroupID FunctionAttribute -> Doc ann
+ppFunctionAttribute (Left grpId) = pretty grpId
+ppFunctionAttribute (Right fA) = pretty fA
+
+ppFunctionAttributes :: [Either GroupID FunctionAttribute] -> Doc ann
+ppFunctionAttributes attribs = hsep $ fmap ppFunctionAttribute attribs
 
 ppMetadata :: Maybe Metadata -> Doc ann
 ppMetadata Nothing = "null"
@@ -727,7 +737,7 @@ instance Pretty DICompileUnit where
     [ ("language", Just (pretty language))
     , ("file", Just (pretty file))
     , ("producer", ppSbs producer)
-    , ("isOptimized", Just (pretty optimized))
+    , ("isOptimized", Just (ppBoolean optimized))
     , ("flags", ppSbs flags)
     , ("runtimeVersion", Just (pretty runtimeVersion))
     , ("splitDebugFileName", ppSbs splitDebugFileName)
@@ -738,9 +748,9 @@ instance Pretty DICompileUnit where
     , ("imports", ppDIArray (map pretty imports))
     , ("macros", ppDIArray (map pretty macros))
     , ("dwoId", Just (pretty dWOId))
-    , ("splitDebugInlining", Just (pretty splitDebugInlining))
-    , ("debugInfoForProfiling", Just (pretty debugInfoForProfiling))
-    , ("gnuPubnames", Just (pretty gnuPubnames))
+    , ("splitDebugInlining", Just (ppBoolean splitDebugInlining))
+    , ("debugInfoForProfiling", Just (ppBoolean debugInfoForProfiling))
+    , ("gnuPubnames", Just (ppBoolean gnuPubnames))
     ]
 
 instance Pretty DebugEmissionKind where
@@ -802,15 +812,15 @@ instance Pretty DISubprogram where
    , ("file", fmap pretty file)
    , ("line", Just (pretty line))
    , ("type", fmap pretty type')
-   , ("isLocal", Just (pretty localToUnit))
-   , ("isDefinition", Just (pretty definition))
+   , ("isLocal", Just (ppBoolean localToUnit))
+   , ("isDefinition", Just (ppBoolean definition))
    , ("scopeLine", Just (pretty scopeLine))
    , ("containingType", fmap pretty containingType)
    , ("virtuality", ppVirtuality virtuality)
    , ("virtualIndex", Just (pretty virtualityIndex))
    , ("thisAdjustment", Just (pretty thisAdjustment))
    , ("flags", ppDIFlags flags)
-   , ("isOptimized", Just (pretty optimized))
+   , ("isOptimized", Just (ppBoolean optimized))
    , ("unit", fmap pretty unit)
    , ("templateParams", ppDIArray (map pretty templateParams))
    , ("declaration", fmap pretty declaration)
@@ -980,8 +990,8 @@ instance Pretty DIGlobalVariable where
     , ("file", fmap pretty file)
     , ("line", Just (pretty line))
     , ("type", fmap pretty type')
-    , ("isLocal", Just (pretty local))
-    , ("isDefinition", Just (pretty definition))
+    , ("isLocal", Just (ppBoolean local))
+    , ("isDefinition", Just (ppBoolean definition))
     , ("declaration", fmap pretty staticDataMemberDeclaration)
     , ("align", Just (pretty alignInBits))
     ]
@@ -1221,8 +1231,8 @@ ppNullInitializer _ = error "Non-pointer argument. (Malformed AST)"
 
 ppCall :: Instruction -> Doc ann
 ppCall Call { function = Right f,..}
-  = tail <+> "call" <+> pretty callingConvention <+> pretty returnAttributes <+> pretty resultType <+> ftype
-    <+> pretty f <> parens (commas $ fmap pretty arguments) <+> pretty functionAttributes
+  = tail <+> "call" <+> pretty callingConvention <+> ppReturnAttributes returnAttributes <+> pretty resultType <+> ftype
+    <+> pretty f <> parens (commas $ fmap ppArguments arguments) <+> ppFunctionAttributes functionAttributes
     where
       (functionType@FunctionType {..}) = referencedType (typeOf f)
       ftype = if isVarArg
@@ -1237,7 +1247,7 @@ ppCall Call { function = Right f,..}
         Just NoTail -> "notail"
         Nothing -> mempty
 ppCall Call { function = Left (IA.InlineAssembly {..}), ..}
-  = tail <+> "call" <+> pretty callingConvention <+> pretty returnAttributes <+> pretty type'
+  = tail <+> "call" <+> pretty callingConvention <+> ppReturnAttributes returnAttributes <+> pretty type'
     <+> "asm" <+> sideeffect' <+> align' <+> dialect' <+> dquotes (pretty (pack (BL.unpack assembly))) <> ","
     <+> dquotes (pretty constraints) <> parens (commas $ fmap pretty arguments) <+> pretty functionAttributes
     where
@@ -1254,12 +1264,15 @@ ppCall Call { function = Left (IA.InlineAssembly {..}), ..}
       dialect' = case dialect of IA.ATTDialect -> ""; IA.IntelDialect -> "inteldialect"
 ppCall x = error "Non-callable argument. (Malformed AST)"
 
+ppReturnAttributes :: [ParameterAttribute] -> Doc ann
+ppReturnAttributes pas = hsep $ fmap pretty pas
+
 -- Differs from Call in record name conventions only so needs a seperate almost
 -- identical function. :(
 ppInvoke :: Terminator -> Doc ann
 ppInvoke Invoke { function' = Right f,..}
   = "invoke" <+> pretty callingConvention' <+> pretty resultType <+> ftype
-    <+> pretty f <> parens (commas $ fmap pretty arguments') <+> pretty functionAttributes'
+    <+> pretty f <> parens (commas $ fmap ppArguments arguments') <+> pretty functionAttributes'
     where
       (functionType@FunctionType {..}) = referencedType (typeOf f)
       ftype = if isVarArg
