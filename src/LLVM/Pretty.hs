@@ -436,11 +436,8 @@ ppLinkage omitExternal = \case
    L.LinkOnceODR             -> "linkonce_odr"
    L.WeakODR                 -> "weak_odr"
 
-newtype PrettyInstructionMetadata = PrettyInstructionMetadata InstructionMetadata
-
-instance Pretty PrettyInstructionMetadata where
-  pretty (PrettyInstructionMetadata meta) =
-    commas ["!" <> short x <+> pretty y | (x,y) <- meta]
+ppInstructionMetadata :: InstructionMetadata -> Doc ann
+ppInstructionMetadata meta = commas ["!" <> short x <+> pretty y | (x,y) <- meta]
 
 instance Pretty MetadataNodeID where
   pretty (MetadataNodeID x) = "!" <> pretty ((fromIntegral x) :: Int)
@@ -1306,7 +1303,7 @@ specialFP f = isNaN f || f == 1 / 0 || f == - 1 / 0
 
 ppInstrMeta :: InstructionMetadata -> Doc ann
 ppInstrMeta [] = mempty
-ppInstrMeta xs = "," <> pretty (PrettyInstructionMetadata xs)
+ppInstrMeta xs = "," <> ppInstructionMetadata xs
 
 ppLayoutOptions :: LayoutOptions
 ppLayoutOptions = LayoutOptions (AvailablePerLine 100 0.5)
