@@ -556,20 +556,20 @@ instance PP Instruction where
       bounds False = empty
 
       ppInstrWithNuwNsw :: Doc -> Bool -> Bool -> Operand -> Operand -> InstructionMetadata -> Doc
-      ppInstrWithNuwNsw name nuw nsw op1 op2 metadata =
+      ppInstrWithNuwNsw name nuw nsw op0 op1 metadata =
         name
         <+> ppBool "nuw" nuw
         <+> ppBool "nsw" nsw
-        <+> ppTyped op1
-        `cma` pp op2
+        <+> ppTyped op0
+        `cma` pp op1
         <+> ppInstrMeta metadata
 
       ppInstrWithExact :: Doc -> Bool -> Operand -> Operand -> InstructionMetadata -> Doc
-      ppInstrWithExact name exact op1 op2 metadata =
+      ppInstrWithExact name exact op0 op1 metadata =
         name
         <+> ppBool "exact" exact
-        <+> ppTyped op1
-        `cma` pp op2
+        <+> ppTyped op0
+        `cma` pp op1
         <+> ppInstrMeta metadata
 
 instance PP CallableOperand where
