@@ -52,8 +52,8 @@ import qualified Data.ByteString.Lazy.Char8 as BF
 import Data.ByteString.Lazy (fromStrict)
 import Data.ByteString.Internal (w2c)
 import Data.Text.Prettyprint.Doc
+import qualified Data.Text.Prettyprint.Doc as P
 import Data.Text.Prettyprint.Doc.Render.Text
--- import Text.PrettyPrint.Leijen.Text hiding (column, line, (<>))
 
 import qualified Data.ByteString.Char8 as BL
 import qualified Data.ByteString.Short as BS
@@ -450,7 +450,7 @@ instance Pretty GroupID where
 
 instance Pretty BasicBlock where
   pretty (BasicBlock nm instrs term) =
-    label <> softline <> indent 2 (vcat $ (fmap pretty instrs) ++ [pretty term])
+    label <> P.line <> indent 2 (vcat $ (fmap pretty instrs) ++ [pretty term])
     where
       label = case nm of
         UnName _ -> "; <label>:" <> pretty nm <> ":"
@@ -559,10 +559,10 @@ instance Pretty Instruction where
     ExtractElement {..} -> "extractelement" <+> commas [ppTyped vector, ppTyped index] <+> ppInstrMeta metadata
     InsertValue {..} -> "insertvalue" <+> commas (ppTyped aggregate : ppTyped element : fmap pretty indices') <+> ppInstrMeta metadata
 
-    Fence {..} -> "fence" <+> pretty atomicity <+> ppInstrMeta metadata
-    AtomicRMW {..} -> "atomicrmw" <+> ppVolatile volatile <+> pretty rmwOperation <+> ppTyped address `cma` ppTyped value <+> pretty atomicity  <+> ppInstrMeta metadata
+    Fence {..} -> "fence" <+> ppAtomicity atomicity <+> ppInstrMeta metadata
+    AtomicRMW {..} -> "atomicrmw" <+> ppVolatile volatile <+> pretty rmwOperation <+> ppTyped address `cma` ppTyped value <+> ppAtomicity atomicity  <+> ppInstrMeta metadata
     CmpXchg {..} -> "cmpxchg" <+> ppVolatile volatile <+> ppTyped address `cma` ppTyped expected `cma` ppTyped replacement
-      <+> pretty atomicity <+> pretty failureMemoryOrdering <+> ppInstrMeta metadata
+      <+> ppAtomicity atomicity <+> pretty failureMemoryOrdering <+> ppInstrMeta metadata
 
     AddrSpaceCast {..} -> "addrspacecast" <+> ppTyped operand0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata
     VAArg {..} -> "va_arg" <+> ppTyped argList `cma` pretty type' <+> ppInstrMeta metadata
@@ -779,7 +779,7 @@ instance Pretty DINamespace where
   pretty Namespace {..} = ppDINode "DINamespace"
     [ ("name", ppSbs name)
     , ("scope", Just (maybe "null" pretty scope))
-    , ("exportSymbols", Just (pretty exportSymbols))
+    , ("exportSymbols", Just (ppBoolean exportSymbols))
     ]
 
 instance Pretty DIType where
@@ -1143,6 +1143,9 @@ instance Pretty IP.IntegerPredicate where
 --   pretty (scope, order) =
 --     pretty scope <+> pretty order
 
+ppAtomicity :: Atomicity -> Doc ann
+ppAtomicity (scope, order) = pretty scope <+> pretty order
+
 instance Pretty SynchronizationScope where
   pretty = \case
     SingleThread -> "syncscope(\"singlethread\")"
@@ -1249,7 +1252,7 @@ ppCall Call { function = Right f,..}
 ppCall Call { function = Left (IA.InlineAssembly {..}), ..}
   = tail <+> "call" <+> pretty callingConvention <+> ppReturnAttributes returnAttributes <+> pretty type'
     <+> "asm" <+> sideeffect' <+> align' <+> dialect' <+> dquotes (pretty (pack (BL.unpack assembly))) <> ","
-    <+> dquotes (pretty constraints) <> parens (commas $ fmap pretty arguments) <+> pretty functionAttributes
+    <+> dquotes (pretty constraints) <> parens (commas $ fmap ppArguments arguments) <+> ppFunctionAttributes functionAttributes
     where
       tail = case tailCallKind of
         Just Tail -> "tail"
@@ -1272,7 +1275,7 @@ ppReturnAttributes pas = hsep $ fmap pretty pas
 ppInvoke :: Terminator -> Doc ann
 ppInvoke Invoke { function' = Right f,..}
   = "invoke" <+> pretty callingConvention' <+> pretty resultType <+> ftype
-    <+> pretty f <> parens (commas $ fmap ppArguments arguments') <+> pretty functionAttributes'
+    <+> pretty f <> parens (commas $ fmap ppArguments arguments') <+> ppFunctionAttributes functionAttributes'
     where
       (functionType@FunctionType {..}) = referencedType (typeOf f)
       ftype = if isVarArg
