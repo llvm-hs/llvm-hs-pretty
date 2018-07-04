@@ -500,17 +500,18 @@ instance Pretty Terminator where
 
 instance Pretty Instruction where
   pretty = \case
-    Add {..}    -> "add"  <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
-    Sub {..}    -> "sub"  <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
-    Mul {..}    -> "mul"  <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
-    Shl {..}    -> "shl"  <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
-    AShr {..}   -> "ashr" <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
-    LShr {..}   -> "lshr" <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
+    Add {..}    -> ppInstrWithNuwNsw "add" nuw nsw operand0 operand1 metadata
+    Sub {..}    -> ppInstrWithNuwNsw "sub" nuw nsw operand0 operand1 metadata
+    Mul {..}    -> ppInstrWithNuwNsw "mul" nuw nsw operand0 operand1 metadata
+    Shl {..}    -> ppInstrWithNuwNsw "shl" nuw nsw operand0 operand1 metadata
+    AShr {..}   -> ppInstrWithExact "ashr" exact operand0 operand1 metadata
+    LShr {..}   -> ppInstrWithExact "lshr" exact operand0 operand1 metadata
+
     And {..}    -> "and"  <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
     Or {..}     -> "or"   <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
     Xor {..}    -> "xor"  <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
-    SDiv {..}   -> "sdiv"  <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
-    UDiv {..}   -> "udiv"  <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
+    SDiv {..}   -> ppInstrWithExact "sdiv" exact operand0 operand1 metadata
+    UDiv {..}   -> ppInstrWithExact "udiv" exact operand0 operand1 metadata
     SRem {..}   -> "srem"  <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
     URem {..}   -> "urem"  <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
 
@@ -524,8 +525,8 @@ instance Pretty Instruction where
     Alloca {..} -> "alloca" <+> pretty allocatedType <> num <> ppAlign alignment <+> ppInstrMeta metadata
       where num   = case numElements of Nothing -> mempty
                                         Just o -> "," <+> ppTyped o
-    Store {..}  -> "store" <+> ppTyped value `cma` ppTyped address <> ppAlign alignment
-    Load {..}   -> "load" <+> pretty argTy `cma` ppTyped address <> ppAlign alignment <+> ppInstrMeta metadata
+    Store {..}  -> "store" <+> ppVolatile volatile <+> ppTyped value `cma` ppTyped address <> ppAlign alignment <+> ppInstrMeta metadata
+    Load {..}   -> "load" <+> ppVolatile volatile <+> pretty argTy `cma` ppTyped address <> ppAlign alignment <+> ppInstrMeta metadata
       where PointerType argTy _ = typeOf address
     Phi {..}    -> "phi" <+> pretty type' <+> commas (fmap phiIncoming incomingValues) <+> ppInstrMeta metadata
 
@@ -573,6 +574,23 @@ instance Pretty Instruction where
     where
       bounds True = "inbounds"
       bounds False = mempty
+
+      ppInstrWithNuwNsw :: Doc ann -> Bool -> Bool -> Operand -> Operand -> InstructionMetadata -> Doc ann 
+      ppInstrWithNuwNsw name nuw nsw op0 op1 metadata =
+        name
+        <+> ppBool "nuw" nuw
+        <+> ppBool "nsw" nsw
+        <+> ppTyped op0
+        `cma` pretty op1
+        <+> ppInstrMeta metadata
+
+      ppInstrWithExact :: Doc ann -> Bool -> Operand -> Operand -> InstructionMetadata -> Doc ann
+      ppInstrWithExact name exact op0 op1 metadata =
+        name
+        <+> ppBool "exact" exact
+        <+> ppTyped op0
+        `cma` pretty op1
+        <+> ppInstrMeta metadata
 
 instance Pretty CallableOperand where
   pretty (Left asm) = error "CallableOperand"
