@@ -38,7 +38,7 @@ llvmFile fname = do
     return True
 
 makeTest :: FilePath -> TestTree
-makeTest fname = testCase fname $ assert  (llvmFile fname)
+makeTest fname = testCase fname $ assertBool "" =<< llvmFile fname
 
 testPath :: FilePath
 testPath = "tests/input/"

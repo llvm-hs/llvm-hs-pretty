@@ -29,7 +29,7 @@ library
     array                >= 0.5,
     base                 >= 4.6   && < 5.0,
     bytestring           >= 0.10,
-    llvm-hs-pure         >= 6.2,
+    llvm-hs-pure         >= 7.0,
     text                 >= 0.1,
     prettyprinter        >= 1.2
 
@@ -50,5 +50,5 @@ Test-suite test
     tasty-hunit          -any,
     tasty-golden         >= 1.1,
     llvm-hs-pretty       -any,
-    llvm-hs              >= 6.2,
-    llvm-hs-pure         >= 6.2
+    llvm-hs              >= 7.0,
+    llvm-hs-pure         >= 7.0
