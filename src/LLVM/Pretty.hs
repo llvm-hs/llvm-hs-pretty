@@ -690,7 +690,11 @@ instance Pretty DILocalScope where
   pretty (DISubprogram p) = pretty p
 
 instance Pretty DIEnumerator where
-  pretty (Enumerator val name) = ppDINode "DIEnumerator" [("name", ppSbs name), ("value", Just (pretty val))]
+  pretty (Enumerator val unsigned name) =
+    ppDINode "DIEnumerator"
+      [ ("name", ppSbs name)
+      , ("isUnsigned", if unsigned then Just "true" else Nothing)
+      , ("value", Just (pretty val))]
 
 instance Pretty DIImportedEntity where
   pretty ImportedEntity {..} = ppDINode "DIImportedEntity"
@@ -727,6 +731,10 @@ instance Pretty DIScope where
 
 instance Pretty DISubrange where
   pretty Subrange {..} = ppDINode "DISubrange" [("count", Just (pretty count)), ("lowerBound", Just (pretty lowerBound))]
+
+instance Pretty DICount where
+  pretty (DICountConstant c) = pretty c
+  pretty (DICountVariable v) = pretty v
 
 instance Pretty DITemplateParameter where
   pretty DITemplateTypeParameter {..} = ppDINode "DITemplateTypeParameter"
@@ -777,9 +785,12 @@ instance Pretty DIFile where
   pretty (File {..}) = ppDINode "DIFile" $
     [ ("filename", Just (dquotes (pretty filename)))
     , ("directory", Just (dquotes (pretty directory)))
-    , ("checksum", ppSbs checksum)
-    , ("checksumkind", Just (pretty checksumKind))
     ]
+    <> ppDIChecksum checksum
+
+ppDIChecksum :: Maybe ChecksumInfo -> [([Char], Maybe (Doc ann))]
+ppDIChecksum Nothing = []
+ppDIChecksum (Just (ChecksumInfo kind val)) = [("checksumkind", Just (pretty kind)), ("checksum", ppSbs val)]
 
 instance Pretty DIModule where
   pretty O.Module {..} = ppDINode "DIModule"
@@ -839,7 +850,7 @@ instance Pretty DISubprogram where
    , ("unit", fmap pretty unit)
    , ("templateParams", ppDIArray (map pretty templateParams))
    , ("declaration", fmap pretty declaration)
-   , ("variables", ppDIArray (map pretty variables))
+   , ("retainedNodes", ppDIArray (map pretty retainedNodes))
    , ("thrownTypes", ppDIArray (map pretty thrownTypes))
    ]
 
@@ -849,7 +860,6 @@ ppVirtuality Virtual = Just "DW_VIRTUALITY_virtual"
 ppVirtuality PureVirtual = Just "DW_VIRTUALITY_pure_virtual"
 
 instance Pretty ChecksumKind where
-  pretty None = "CSK_None"
   pretty MD5 = "CSK_MD5"
   pretty SHA1 = "CSK_SHA1"
 
