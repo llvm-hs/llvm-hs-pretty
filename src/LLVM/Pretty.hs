@@ -652,6 +652,17 @@ ppDWOp o = case o of
   DW_OP_Mul -> ["DW_OP_mul"]
   DW_OP_Deref -> ["DW_OP_deref"]
   DW_OP_XDeref -> ["DW_OP_xderef"]
+  DW_OP_Lit0 -> ["DW_OP_Lit0"]
+  DW_OP_Div -> ["DW_OP_Div"]
+  DW_OP_Mod -> ["DW_OP_Mod"]
+  DW_OP_Not -> ["DW_OP_Not"]
+  DW_OP_Or -> ["DW_OP_Or"]
+  DW_OP_Xor -> ["DW_OP_Xor"]
+  DW_OP_And -> ["DW_OP_And"]
+  DW_OP_Shr -> ["DW_OP_Shr"]
+  DW_OP_Shra -> ["DW_OP_Shra"]
+  DW_OP_Shl -> ["DW_OP_Shl"]
+  DW_OP_Dup -> ["DW_OP_Dup"]
 
 instance Pretty DIGlobalVariableExpression where
   pretty e = ppDINode "DIGlobalVariableExpression"
@@ -773,7 +784,8 @@ instance Pretty DICompileUnit where
     , ("dwoId", Just (pretty dWOId))
     , ("splitDebugInlining", Just (ppBoolean splitDebugInlining))
     , ("debugInfoForProfiling", Just (ppBoolean debugInfoForProfiling))
-    , ("gnuPubnames", Just (ppBoolean gnuPubnames))
+    , ("nameTableKind", Just (pretty nameTableKind))
+    , ("debugBaseAddress", Just (ppBoolean debugBaseAddress))
     ]
 
 instance Pretty DebugEmissionKind where
@@ -880,6 +892,7 @@ instance Pretty Encoding where
   pretty e = case e of
     AddressEncoding -> "DW_ATE_address"
     BooleanEncoding -> "DW_ATE_boolean"
+    UTFEncoding -> "DW_ATE_UTF"
     FloatEncoding -> "DW_ATE_float"
     SignedEncoding -> "DW_ATE_signed"
     SignedCharEncoding -> "DW_ATE_signed_char"
@@ -1201,6 +1214,12 @@ instance Pretty RMW.RMWOperation where
 
 instance Pretty DataLayout where
   pretty x = pretty (BL.unpack (dataLayoutToString x))
+
+instance Pretty DebugNameTableKind where
+  pretty = \case
+    NameTableKindDefault -> "Default"
+    NameTableKindGNU -> "GNU"
+    NameTableKindNone -> "None"
 
 -- -------------------------------------------------------------------------------
 -- -- Special Case Hacks
