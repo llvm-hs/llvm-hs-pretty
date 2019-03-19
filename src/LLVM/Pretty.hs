@@ -1217,9 +1217,9 @@ instance Pretty DataLayout where
 
 instance Pretty DebugNameTableKind where
   pretty = \case
-    NameTableKindDefault -> "default"
-    NameTableKindGNU -> "gnu"
-    NameTableKindNone -> "none"
+    NameTableKindDefault -> "Default"
+    NameTableKindGNU -> "GNU"
+    NameTableKindNone -> "None"
 
 -- -------------------------------------------------------------------------------
 -- -- Special Case Hacks
