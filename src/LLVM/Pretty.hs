@@ -1281,7 +1281,9 @@ ppCall Call { function = Right f,..}
   = tail <+> "call" <+> pretty callingConvention <+> ppReturnAttributes returnAttributes <+> pretty resultType <+> ftype
     <+> pretty f <> parens (commas $ fmap ppArguments arguments) <+> ppFunctionAttributes functionAttributes
     where
-      (functionType@FunctionType {..}) = referencedType (typeOf f)
+      (functionType@FunctionType {..}) = case (referencedType (typeOf f)) of
+                                           fty@FunctionType {..} -> fty
+                                           _ -> error "Calling non function type"
       ftype = if isVarArg
               then ppFunctionArgumentTypes functionType
               else mempty
