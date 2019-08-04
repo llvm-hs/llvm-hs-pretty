@@ -532,7 +532,10 @@ instance Pretty Instruction where
 
     ICmp {..}   -> "icmp" <+> pretty iPredicate <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
 
-    c@Call {..} -> ppCall c  <+> ppInstrMeta metadata
+    c@Call { function = f, ..} ->
+      case f of
+        (Right (LocalReference VoidType _)) -> error "instructions returning void cannot have a name"
+        _ -> ppCall c  <+> ppInstrMeta metadata
     Select {..} -> "select" <+> commas [ppTyped condition', ppTyped trueValue, ppTyped falseValue] <+> ppInstrMeta metadata
     SExt {..}   -> "sext" <+> ppTyped operand0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata
     ZExt {..}   -> "zext" <+> ppTyped operand0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata
