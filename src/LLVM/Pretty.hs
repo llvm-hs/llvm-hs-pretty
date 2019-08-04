@@ -535,6 +535,8 @@ instance Pretty Instruction where
     c@Call { function = f, ..} ->
       case f of
         (Right (LocalReference VoidType _)) -> error "instructions returning void cannot have a name"
+        (Right (ConstantOperand (C.GlobalReference (FunctionType VoidType _ _) _))) ->
+          error "instructions returning void cannot have a name"
         _ -> ppCall c  <+> ppInstrMeta metadata
     Select {..} -> "select" <+> commas [ppTyped condition', ppTyped trueValue, ppTyped falseValue] <+> ppInstrMeta metadata
     SExt {..}   -> "sext" <+> ppTyped operand0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata
