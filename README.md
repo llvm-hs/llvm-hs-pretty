@@ -8,6 +8,11 @@ A pretty printer for ``llvm-hs-pure``. Goal is to be able to pretty print a
 sufficiently large subset of the LLVM AST from pure Haskell without having to go
 through the C++ API.
 
+> **Note**: It is possible to construct llvm-hs-pure ASTs that are invalid ASTs
+> and as such there is no meaningful way to print them. Always run the LLVM
+> verifier on your AST to test it is sound. If you encounter incomplete pattern
+> matches using this library you likely have constructed invalid IR.*
+
 Usage
 -----
 
@@ -29,12 +34,12 @@ Tests
 
 ```bash
 # This is only necessary for running the test suite
-sudo apt-get install llvm-dev-5.0
+sudo apt-get install llvm-9-dev
 ```
 
 The test suite currently consists of round tripping a LLVM IR from correct IR
-outputted by the llc toolchain, parsing into llvm-general AST and then printing
-it back out and comparing it with the original textual form to see if the pretty
+outputted by the llc toolchain, parsing into llvm-hs AST and then printing it
+back out and comparing it with the original textual form to see if the pretty
 printer faithfully preserves the structure. The sample modules are in
 ``tests/``.
 
@@ -148,5 +153,5 @@ License
 
 Released under the MIT License.
 
-Copyright (c) 2014-2018, Stephen Diehl
+Copyright (c) 2014-2020, Stephen Diehl
 Copyright (c) 2015 Cedric Shock
