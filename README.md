@@ -11,7 +11,7 @@ through the C++ API.
 > **Note**: It is possible to construct llvm-hs-pure ASTs that are invalid ASTs
 > and as such there is no meaningful way to print them. Always run the LLVM
 > verifier on your AST to test it is sound. If you encounter incomplete pattern
-> matches using this library you likely have constructed invalid IR.*
+> matches using this library you likely have constructed invalid IR.
 
 Usage
 -----

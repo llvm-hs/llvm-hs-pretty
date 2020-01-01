@@ -1,5 +1,5 @@
 name:                llvm-hs-pretty
-version:             0.6.1.0
+version:             0.9.0.0
 license:             MIT
 synopsis:            A pretty printer for LLVM IR. 
 description:         A pretty printer for the LLVM AST types provided by llvm-hs.
@@ -20,8 +20,6 @@ library
   hs-source-dirs:      src
   exposed-modules:     
     LLVM.Pretty
-  other-modules:
-    LLVM.Token
   ghc-options:
     -fwarn-incomplete-patterns
   default-language:    Haskell2010

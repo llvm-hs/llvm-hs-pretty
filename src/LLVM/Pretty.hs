@@ -372,6 +372,7 @@ instance Pretty ParameterAttribute where
     Returned                   -> "returned"
     SwiftSelf                  -> "swiftself"
     SwiftError                 -> "swifterror"
+    ImmArg                     -> "imgarg"
     PA.StringAttribute k v -> dquotes (short k) <> "=" <> dquotes (short v)
 
 instance Pretty CC.CallingConvention where
@@ -527,7 +528,10 @@ instance Pretty Instruction where
                                         Just o -> "," <+> ppTyped o
     Store {..}  -> "store" <+> ppVolatile volatile <+> ppTyped value `cma` ppTyped address <> ppAlign alignment <+> ppInstrMeta metadata
     Load {..}   -> "load" <+> ppVolatile volatile <+> pretty argTy `cma` ppTyped address <> ppAlign alignment <+> ppInstrMeta metadata
-      where PointerType argTy _ = typeOf address
+      where
+        argTy = case typeOf address of
+          PointerType argTy_ _ -> argTy_
+          _ -> error "invalid load of non-pointer type. (Malformed AST)"
     Phi {..}    -> "phi" <+> pretty type' <+> commas (fmap phiIncoming incomingValues) <+> ppInstrMeta metadata
 
     ICmp {..}   -> "icmp" <+> pretty iPredicate <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
@@ -575,7 +579,7 @@ instance Pretty Instruction where
       bounds True = "inbounds"
       bounds False = mempty
 
-      ppInstrWithNuwNsw :: Doc ann -> Bool -> Bool -> Operand -> Operand -> InstructionMetadata -> Doc ann 
+      ppInstrWithNuwNsw :: Doc ann -> Bool -> Bool -> Operand -> Operand -> InstructionMetadata -> Doc ann
       ppInstrWithNuwNsw name nuw nsw op0 op1 metadata =
         name
         <+> ppBool "nuw" nuw
@@ -1120,7 +1124,9 @@ instance Pretty C.Constant where
 
   pretty C.GetElementPtr {..} = "getelementptr" <+> bounds inBounds <+> parens (commas (pretty argTy : fmap ppTyped (address:indices)))
     where
-      PointerType argTy _ = typeOf address
+      argTy = case typeOf address of
+        PointerType argTy_ _ -> argTy_
+        _ -> error "invalid load of non-pointer type. (Malformed AST)"
       bounds True = "inbounds"
       bounds False = mempty
 
@@ -1283,7 +1289,7 @@ ppCall Call { function = Right f,..}
     where
       (functionType@FunctionType {..}) = case (referencedType (typeOf f)) of
                                            fty@FunctionType {..} -> fty
-                                           _ -> error "Calling non function type"
+                                           _ -> error "Calling non function type. (Malformed AST)"
       ftype = if isVarArg
               then ppFunctionArgumentTypes functionType
               else mempty
@@ -1323,7 +1329,10 @@ ppInvoke Invoke { function' = Right f,..}
   = "invoke" <+> pretty callingConvention' <+> pretty resultType <+> ftype
     <+> pretty f <> parens (commas $ fmap ppArguments arguments') <+> ppFunctionAttributes functionAttributes'
     where
-      (functionType@FunctionType {..}) = referencedType (typeOf f)
+      (functionType@FunctionType {..}) =
+        case referencedType (typeOf f) of
+          fty@FunctionType{..} -> fty
+          _ -> error "Invoking non-function type. (Malformed AST)"
       ftype = if isVarArg
               then ppFunctionArgumentTypes functionType
               else mempty
@@ -1363,7 +1372,7 @@ ppLayoutOptions = LayoutOptions (AvailablePerLine 100 0.5)
 
 -- | Pretty print a LLVM module
 ppllvm :: Module -> Text
-ppllvm = renderLazy . layoutPretty ppLayoutOptions . pretty 
+ppllvm = renderLazy . layoutPretty ppLayoutOptions . pretty
 
 -- | Pretty print a printable LLVM expression
 ppll :: Pretty a => a -> Text
