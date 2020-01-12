@@ -516,11 +516,11 @@ instance Pretty Instruction where
     SRem {..}   -> "srem"  <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
     URem {..}   -> "urem"  <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
 
-    FAdd {..}   -> "fadd" <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
-    FSub {..}   -> "fsub" <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
-    FMul {..}   -> "fmul" <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
-    FDiv {..}   -> "fdiv" <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
-    FRem {..}   -> "frem" <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
+    FAdd {..}   -> "fadd" <+> (pretty fastMathFlags) <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
+    FSub {..}   -> "fsub" <+> (pretty fastMathFlags) <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
+    FMul {..}   -> "fmul" <+> (pretty fastMathFlags) <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
+    FDiv {..}   -> "fdiv" <+> (pretty fastMathFlags) <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
+    FRem {..}   -> "frem" <+> (pretty fastMathFlags) <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
     FCmp {..}   -> "fcmp" <+> pretty fpPredicate <+> ppTyped operand0 `cma` pretty operand1 <+> ppInstrMeta metadata
 
     Alloca {..} -> "alloca" <+> pretty allocatedType <> num <> ppAlign alignment <+> ppInstrMeta metadata
@@ -1226,6 +1226,17 @@ instance Pretty DebugNameTableKind where
     NameTableKindDefault -> "Default"
     NameTableKindGNU -> "GNU"
     NameTableKindNone -> "None"
+
+instance Pretty FastMathFlags where
+  pretty FastMathFlags {..} =
+        if allowReassoc then "reassoc" else ""
+    <+> if noNaNs then "nnan" else ""
+    <+> if noInfs then "ninf" else ""
+    <+> if noSignedZeros then "nsz" else ""
+    <+> if allowReciprocal then "arcp" else ""
+    <+> if allowContract then "contract" else ""
+    <+> if approxFunc then "afn" else ""
+
 
 -- -------------------------------------------------------------------------------
 -- -- Special Case Hacks
