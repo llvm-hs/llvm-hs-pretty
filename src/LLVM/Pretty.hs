@@ -526,8 +526,8 @@ instance Pretty Instruction where
     Alloca {..} -> "alloca" <+> pretty allocatedType <> num <> ppAlign alignment <+> ppInstrMeta metadata
       where num   = case numElements of Nothing -> mempty
                                         Just o -> "," <+> ppTyped o
-    Store {..}  -> "store" <+> ppVolatile volatile <+> ppTyped value `cma` ppTyped address <> ppAlign alignment <+> ppInstrMeta metadata
-    Load {..}   -> "load" <+> ppVolatile volatile <+> pretty argTy `cma` ppTyped address <> ppAlign alignment <+> ppInstrMeta metadata
+    Store {..}  -> "store" <+> ppMAtomicity maybeAtomicity <+> ppVolatile volatile <+> ppTyped value `cma` ppTyped address <+> ppMOrdering maybeAtomicity <> ppAlign alignment <+> ppInstrMeta metadata
+    Load {..}   -> "load" <+> ppMAtomicity maybeAtomicity <+> ppVolatile volatile <+> pretty argTy `cma` ppTyped address <+> ppMOrdering maybeAtomicity <> ppAlign alignment <+> ppInstrMeta metadata
       where
         argTy = case typeOf address of
           PointerType argTy_ _ -> argTy_
@@ -1189,6 +1189,14 @@ instance Pretty IP.IntegerPredicate where
 
 ppAtomicity :: Atomicity -> Doc ann
 ppAtomicity (scope, order) = pretty scope <+> pretty order
+
+ppMAtomicity :: Maybe Atomicity -> Doc ann
+ppMAtomicity (Just m) = "atomic"
+ppMAtomicity Nothing = mempty
+
+ppMOrdering :: Maybe Atomicity -> Doc ann
+ppMOrdering (Just (scope, order)) = pretty order
+ppMOrdering Nothing = mempty
 
 instance Pretty SynchronizationScope where
   pretty = \case
