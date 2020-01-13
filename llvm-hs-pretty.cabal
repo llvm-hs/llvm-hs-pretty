@@ -2,7 +2,7 @@ name:                llvm-hs-pretty
 version:             0.9.0.0
 license:             MIT
 synopsis:            A pretty printer for LLVM IR. 
-description:         A pretty printer for the LLVM AST types provided by llvm-hs.
+description:         A pure Haskell pretty printer for the LLVM AST types provided by llvm-hs.
 license-file:        LICENSE
 author:              Stephen Diehl
 maintainer:          stephen.m.diehl@gmail.com
@@ -24,12 +24,12 @@ library
     -fwarn-incomplete-patterns
   default-language:    Haskell2010
   build-depends:
-    array                >= 0.5,
+    array                >= 0.5   && < 0.6,
     base                 >= 4.6   && < 5.0,
-    bytestring           >= 0.10,
-    llvm-hs-pure         >= 9.0  && < 10.0,
-    text                 >= 0.1,
-    prettyprinter        >= 1.2
+    bytestring           >= 0.1   && < 0.11,
+    llvm-hs-pure         >= 9.0   && < 10.0,
+    text                 >= 1.2   && < 2.0,
+    prettyprinter        >= 1.2   && < 1.6
 
 Test-suite test
   type:                exitcode-stdio-1.0
@@ -37,16 +37,16 @@ Test-suite test
   main-is:             Main.hs
   default-language:    Haskell2010
   build-depends: 
-    base                 >= 4.6 && < 5.0,
-    text                 >= 0.1,
-    mtl                  >= 2.2,
-    transformers         >= 0.3 && < 0.6,
-    directory            >= 1.2,
-    filepath             >= 1.3,
-    tasty                >= 0.11,
-    tasty-hspec          >= 1.1,
-    tasty-hunit          -any,
-    tasty-golden         >= 1.1,
-    llvm-hs-pretty       -any,
+    llvm-hs-pretty,
+    base                 >= 4.6  && < 5.0,
+    text                 >= 0.1  && < 1.3,
+    mtl                  >= 2.2  && < 3.0,
+    transformers         >= 0.3  && < 0.6,
+    directory            >= 1.2  && < 2.0,
+    filepath             >= 1.3  && < 2.0,
+    tasty                >= 0.11 && < 2.0,
+    tasty-hspec          >= 1.1  && < 2.0,
+    tasty-hunit          >= 0.1  && < 1.0,
+    tasty-golden         >= 1.1  && < 3.0,
     llvm-hs              >= 9.0  && < 10.0,
     llvm-hs-pure         >= 9.0  && < 10.0
