@@ -1,4 +1,10 @@
-# Revision history for llvm-hs-typed
+# Revision history for llvm-hs-pretty
+
+## 0.9
+
+* Update for llvm-hs 9.0.
+* Add support for printing fast math flags.
+* Add support for printing atomicity on load/store.
 
 ## 0.4
 
