@@ -1116,7 +1116,7 @@ instance Pretty C.Constant where
 
   pretty (C.Undef {}) = "undef"
   pretty (C.TokenNone {}) = "none"
-  pretty (C.BlockAddress fn blk) = "blockaddress" <> parens (commas (fmap pretty [fn, blk]))
+  pretty (C.BlockAddress fn blk) = "blockaddress" <> parens (commas [ global (pretty fn), local' (pretty blk) ])
 
   pretty C.Array {..}
     | memberType == (IntegerType 8) = "c" <> (dquotes $ hcat [ppIntAsChar val | C.Int _ val <- memberValues])
