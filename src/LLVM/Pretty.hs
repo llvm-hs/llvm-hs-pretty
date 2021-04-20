@@ -745,7 +745,7 @@ instance Pretty DIScope where
   pretty (DIType t) = pretty t
 
 instance Pretty DISubrange where
-  pretty Subrange {..} = ppDINode "DISubrange" [("count", Just (pretty count)), ("lowerBound", Just (pretty lowerBound))]
+  pretty Subrange {..} = ppDINode "DISubrange" [("count", Just (pretty count))]
 
 instance Pretty DICount where
   pretty (DICountConstant c) = pretty c
@@ -814,7 +814,6 @@ instance Pretty DIModule where
     , ("name", ppSbs name)
     , ("configMacros", ppSbs configurationMacros)
     , ("includePath", ppSbs includePath)
-    , ("isysroot", ppSbs isysRoot)
     ]
 
 instance Pretty DINamespace where
