@@ -4,7 +4,7 @@
 }:
 mkDerivation {
   pname = "llvm-hs-pretty";
-  version = "0.1.0.0";
+  version = "12.0.0";
   src = ./.;
   libraryHaskellDepends = [
     base bytestring llvm-hs-pure text wl-pprint-text

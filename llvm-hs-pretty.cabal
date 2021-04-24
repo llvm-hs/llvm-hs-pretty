@@ -1,7 +1,7 @@
 name:                llvm-hs-pretty
-version:             0.9.0.0
+version:             12.0.0
 license:             MIT
-synopsis:            A pretty printer for LLVM IR. 
+synopsis:            A pretty printer for LLVM IR.
 description:         A pure Haskell pretty printer for the LLVM AST types provided by llvm-hs.
 license-file:        LICENSE
 author:              Stephen Diehl
@@ -18,7 +18,7 @@ Source-Repository head
 
 library
   hs-source-dirs:      src
-  exposed-modules:     
+  exposed-modules:
     LLVM.Pretty
   ghc-options:
     -fwarn-incomplete-patterns
@@ -36,7 +36,7 @@ Test-suite test
   hs-source-dirs:      tests
   main-is:             Main.hs
   default-language:    Haskell2010
-  build-depends: 
+  build-depends:
     llvm-hs-pretty,
     base                 >= 4.6  && < 5.0,
     text                 >= 0.1  && < 1.3,
@@ -48,5 +48,5 @@ Test-suite test
     tasty-hspec          >= 1.1  && < 2.0,
     tasty-hunit          >= 0.1  && < 1.0,
     tasty-golden         >= 1.1  && < 3.0,
-    llvm-hs              >= 9.0  && < 10.0,
-    llvm-hs-pure         >= 9.0  && < 10.0
+    llvm-hs              >= 12   && < 13,
+    llvm-hs-pure         >= 12   && < 13

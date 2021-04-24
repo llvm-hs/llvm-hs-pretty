@@ -1,5 +1,9 @@
 # Revision history for llvm-hs-pretty
 
+## 12.0.0
+
+* Update for llvm-hs-12.0.0
+
 ## 0.9
 
 * Update for llvm-hs 9.0.
