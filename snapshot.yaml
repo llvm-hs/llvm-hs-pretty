@@ -1,0 +1,7 @@
+resolver: lts-16.31
+
+packages:
+- url: https://github.com/llvm-hs/llvm-hs/archive/8bdab2a59db31618f097a7bb05f7b374e6a96fc4.tar.gz
+  subdirs:
+  - llvm-hs
+  - llvm-hs-pure

@@ -309,47 +309,50 @@ ppAttrInGroup = \case
 
 instance Pretty FunctionAttribute where
   pretty = \case
-   NoReturn            -> "noreturn"
-   NoUnwind            -> "nounwind"
-   FA.ReadNone         -> "readnone"
-   FA.ReadOnly         -> "readonly"
-   FA.WriteOnly        -> "writeonly"
-   NoInline            -> "noinline"
-   AlwaysInline        -> "alwaysinline"
-   MinimizeSize        -> "minsize"
-   OptimizeForSize     -> "optsize"
-   OptimizeNone        -> "optnone"
-   SafeStack           -> "safestack"
-   StackProtect        -> "ssp"
-   StackProtectReq     -> "sspreq"
-   StackProtectStrong  -> "sspstrong"
-   NoRedZone           -> "noredzone"
-   NoImplicitFloat     -> "noimplicitfloat"
-   Naked               -> "naked"
-   InlineHint          -> "inlinehint"
-   StackAlignment n    -> "alignstack" <> parens (pretty n)
-   ReturnsTwice        -> "returns_twice"
-   UWTable             -> "uwtable"
-   NonLazyBind         -> "nonlazybind"
-   Builtin             -> "builtin"
-   NoBuiltin           -> "nobuiltin"
-   Cold                -> "cold"
-   JumpTable           -> "jumptable"
-   NoDuplicate         -> "noduplicate"
-   SanitizeAddress     -> "sanitize_address"
-   SanitizeThread      -> "sanitize_thread"
-   SanitizeMemory      -> "sanitize_memory"
-   SanitizeHWAddress   -> "sanitize_hwaddress"
-   NoRecurse           -> "norecurse"
-   Convergent          -> "convergent"
-   ArgMemOnly          -> "argmemonly"
-   InaccessibleMemOnly -> "inaccessiblememonly"
-   AllocSize a Nothing -> "allocsize" <> parens (pretty a)
-   AllocSize a (Just b) -> "allocsize" <> parens (commas [pretty a, pretty b])
+   AllocSize a (Just b)        -> "allocsize" <> parens (commas [pretty a, pretty b])
+   AllocSize a Nothing         -> "allocsize" <> parens (pretty a)
+   AlwaysInline                -> "alwaysinline"
+   ArgMemOnly                  -> "argmemonly"
+   Builtin                     -> "builtin"
+   Cold                        -> "cold"
+   Convergent                  -> "convergent"
+   FA.ReadNone                 -> "readnone"
+   FA.ReadOnly                 -> "readonly"
+   FA.StringAttribute k v      -> dquotes (short k) <> "=" <> dquotes (short v)
+   FA.WriteOnly                -> "writeonly"
+   InaccessibleMemOnly         -> "inaccessiblememonly"
    InaccessibleMemOrArgMemOnly -> "inaccessiblemem_or_argmemonly"
-   FA.StringAttribute k v -> dquotes (short k) <> "=" <> dquotes (short v)
-   Speculatable        -> "speculatable"
-   StrictFP            -> "strictfp"
+   InlineHint                  -> "inlinehint"
+   JumpTable                   -> "jumptable"
+   MinimizeSize                -> "minsize"
+   Naked                       -> "naked"
+   NoBuiltin                   -> "nobuiltin"
+   NoDuplicate                 -> "noduplicate"
+   FA.NoFree                   -> "nofree"
+   NoImplicitFloat             -> "noimplicitfloat"
+   NoInline                    -> "noinline"
+   NonLazyBind                 -> "nonlazybind"
+   NoRecurse                   -> "norecurse"
+   NoRedZone                   -> "noredzone"
+   NoReturn                    -> "noreturn"
+   NoSync                      -> "nosync"
+   NoUnwind                    -> "nounwind"
+   OptimizeForSize             -> "optsize"
+   OptimizeNone                -> "optnone"
+   ReturnsTwice                -> "returns_twice"
+   SafeStack                   -> "safestack"
+   SanitizeAddress             -> "sanitize_address"
+   SanitizeHWAddress           -> "sanitize_hwaddress"
+   SanitizeMemory              -> "sanitize_memory"
+   SanitizeThread              -> "sanitize_thread"
+   Speculatable                -> "speculatable"
+   StackAlignment n            -> "alignstack" <> parens (pretty n)
+   StackProtectReq             -> "sspreq"
+   StackProtect                -> "ssp"
+   StackProtectStrong          -> "sspstrong"
+   StrictFP                    -> "strictfp"
+   UWTable                     -> "uwtable"
+   WillReturn                  -> "willreturn"
 
 instance Pretty ParameterAttribute where
   pretty = \case
@@ -362,6 +365,7 @@ instance Pretty ParameterAttribute where
     ByVal                      -> "byval"
     NoCapture                  -> "nocapture"
     Nest                       -> "nest"
+    PA.NoFree                  -> "nofree"
     PA.ReadNone                -> "readnone"
     PA.ReadOnly                -> "readonly"
     PA.WriteOnly               -> "writeonly"
@@ -557,10 +561,11 @@ instance Pretty Instruction where
     IntToPtr {..} -> "inttoptr" <+> ppTyped operand0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata
 
     InsertElement {..} -> "insertelement" <+> commas [ppTyped vector, ppTyped element, ppTyped index] <+> ppInstrMeta metadata
-    ShuffleVector {..} -> "shufflevector" <+> commas [ppTyped operand0, ppTyped operand1, ppTyped mask] <+> ppInstrMeta metadata
+    ShuffleVector {..} -> "shufflevector" <+> commas [ppTyped operand0, ppTyped operand1, ppShuffleMask mask] <+> ppInstrMeta metadata
     ExtractElement {..} -> "extractelement" <+> commas [ppTyped vector, ppTyped index] <+> ppInstrMeta metadata
     InsertValue {..} -> "insertvalue" <+> commas (ppTyped aggregate : ppTyped element : fmap pretty indices') <+> ppInstrMeta metadata
 
+    Freeze {..} -> "freeze" <+> pretty type' <+> pretty operand0 <+> ppInstrMeta metadata
     Fence {..} -> "fence" <+> ppAtomicity atomicity <+> ppInstrMeta metadata
     AtomicRMW {..} -> "atomicrmw" <+> ppVolatile volatile <+> pretty rmwOperation <+> ppTyped address `cma` ppTyped value <+> ppAtomicity atomicity  <+> ppInstrMeta metadata
     CmpXchg {..} -> "cmpxchg" <+> ppVolatile volatile <+> ppTyped address `cma` ppTyped expected `cma` ppTyped replacement
@@ -1216,6 +1221,8 @@ instance Pretty RMW.RMWOperation where
     RMW.Xchg -> "xchg"
     RMW.Add -> "add"
     RMW.Sub -> "sub"
+    RMW.FAdd -> "fadd"
+    RMW.FSub -> "fsub"
     RMW.And -> "and"
     RMW.Nand -> "nand"
     RMW.Or -> "or"
@@ -1284,6 +1291,9 @@ ppCommaTyped a = pretty (typeOf a) `cma` pretty a
 phiIncoming :: (Operand, Name) -> Doc ann
 phiIncoming (op, nm) = brackets (pretty op `cma` (local' (pretty nm)))
 
+ppShuffleMask :: [Int32] -> Doc ann
+ppShuffleMask m = pretty (typeOf m) <+> ("<" <+> (commas $ fmap (ppTyped . (ConstantOperand . C.Int 32 . fromIntegral)) m) <+> ">")
+
 ppParams :: (a -> Doc ann) -> ([a], Bool) -> Doc ann
 ppParams ppParam (ps, varrg) = parens . commas $ fmap ppParam ps ++ vargs
     where
@@ -1302,13 +1312,14 @@ ppNullInitializer _ = error "Non-pointer argument. (Malformed AST)"
 
 ppCall :: Instruction -> Doc ann
 ppCall Call { function = Right f,..}
-  = tail <+> "call" <+> pretty callingConvention <+> ppReturnAttributes returnAttributes <+> pretty resultType <+> ftype
+  = tail <+> "call" <+> pretty callingConvention <+> ppReturnAttributes returnAttributes <+> pretty resultType' <+> ftype
     <+> pretty f <> parens (commas $ fmap ppArguments arguments) <+> ppFunctionAttributes functionAttributes
     where
-      (functionType@FunctionType {..}) = case (referencedType (typeOf f)) of
-                                           fty@FunctionType {..} -> fty
-                                           _ -> error "Calling non function type. (Malformed AST)"
-      ftype = if isVarArg
+      functionType = case (referencedType (typeOf f)) of
+                       fty@FunctionType {..} -> fty
+                       _ -> error "Calling non function type. (Malformed AST)"
+      resultType' = resultType functionType
+      ftype = if isVarArg functionType
               then ppFunctionArgumentTypes functionType
               else mempty
       referencedType (PointerType t _) = referencedType t
@@ -1344,14 +1355,14 @@ ppReturnAttributes pas = hsep $ fmap pretty pas
 -- identical function. :(
 ppInvoke :: Terminator -> Doc ann
 ppInvoke Invoke { function' = Right f,..}
-  = "invoke" <+> pretty callingConvention' <+> pretty resultType <+> ftype
+  = "invoke" <+> pretty callingConvention' <+> pretty resultType' <+> ftype
     <+> pretty f <> parens (commas $ fmap ppArguments arguments') <+> ppFunctionAttributes functionAttributes'
     where
-      (functionType@FunctionType {..}) =
-        case referencedType (typeOf f) of
-          fty@FunctionType{..} -> fty
-          _ -> error "Invoking non-function type. (Malformed AST)"
-      ftype = if isVarArg
+      functionType = case referencedType (typeOf f) of
+                       fty@FunctionType{..} -> fty
+                       _ -> error "Invoking non-function type. (Malformed AST)"
+      resultType' = resultType functionType
+      ftype = if isVarArg functionType
               then ppFunctionArgumentTypes functionType
               else mempty
       referencedType (PointerType t _) = referencedType t
