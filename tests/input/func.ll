@@ -84,7 +84,7 @@ declare void @f63(i32 %x, i32, ...)
 declare void @f64(i32 %x, i32 %y, ...)
 
 ; Parameter attributes.
-declare void @f65(i32 "foo" "bar"="baz" align 8 byval dereferenceable(11) dereferenceable_or_null(22) inalloca inreg nest noalias nocapture nonnull readnone readonly returned signext sret swifterror swiftself writeonly zeroext %x)
+declare void @f65(i32 "foo" "bar"="baz" align 8 byval(i32) dereferenceable(11) dereferenceable_or_null(22) inalloca inreg nest noalias nocapture nonnull readnone readonly returned signext sret(i32) swifterror swiftself writeonly zeroext %x)
 
 ; Unnamed address.
 declare void @f66() local_unnamed_addr
@@ -116,7 +116,7 @@ declare void @f75() prologue i32 42
 declare void @f76() personality i32 42
 
 ; Full function declaration.
-declare !foo !{!"bar"} !baz !{!"qux"} external default dllimport ccc "foo" "bar"="baz" align 8 dereferenceable(11) dereferenceable_or_null(22) inreg noalias i32 @f77(i32 %x, i32 "foo" "bar"="baz" align 8 byval dereferenceable(11) dereferenceable_or_null(22) inalloca inreg nest noalias nocapture nonnull readnone readonly returned signext sret swifterror swiftself writeonly zeroext %y, ...) unnamed_addr "foo" "bar"="baz" #0 #1 alignstack(8) allocsize(16) allocsize(32, 64) alwaysinline argmemonly cold convergent inaccessiblemem_or_argmemonly inaccessiblememonly inlinehint jumptable minsize naked nobuiltin noduplicate noimplicitfloat noinline nonlazybind norecurse noredzone noreturn nounwind optnone optsize readnone readonly returns_twice safestack sanitize_address sanitize_memory sanitize_thread ssp sspreq sspstrong uwtable writeonly section "foo" comdat($com1) align 8 gc "foo" prefix i32 42 prologue i32 42 personality i32 42
+declare !foo !{!"bar"} !baz !{!"qux"} external default dllimport ccc "foo" "bar"="baz" align 8 dereferenceable(11) dereferenceable_or_null(22) inreg noalias i32 @f77(i32 %x, i32 "foo" "bar"="baz" align 8 byval(i32) dereferenceable(11) dereferenceable_or_null(22) inalloca inreg nest noalias nocapture nonnull readnone readonly returned signext sret(i32) swifterror swiftself writeonly zeroext %y, ...) unnamed_addr "foo" "bar"="baz" #0 #1 alignstack(8) allocsize(16) allocsize(32, 64) alwaysinline argmemonly cold convergent inaccessiblemem_or_argmemonly inaccessiblememonly inlinehint jumptable minsize naked nobuiltin noduplicate noimplicitfloat noinline nonlazybind norecurse noredzone noreturn nounwind optnone optsize readnone readonly returns_twice safestack sanitize_address sanitize_memory sanitize_thread ssp sspreq sspstrong uwtable writeonly section "foo" comdat($com1) align 8 gc "foo" prefix i32 42 prologue i32 42 personality i32 42
 
 ; Plain function definition.
 define void @f78() {
@@ -158,7 +158,7 @@ define void @f88() !foo !{!"bar"} !baz !{!"qux"} {
 }
 
 ; Full function definition.
-define available_externally default dllimport ccc "foo" "bar"="baz" align 8 dereferenceable(11) dereferenceable_or_null(22) inreg noalias i32 @f89(i32 %x, i32 "foo" "bar"="baz" align 8 byval dereferenceable(11) dereferenceable_or_null(22) inalloca inreg nest noalias nocapture nonnull readnone readonly returned signext sret swifterror swiftself writeonly zeroext %y, ...) unnamed_addr "foo" "bar"="baz" #0 #1 alignstack(8) allocsize(16) allocsize(32, 64) alwaysinline argmemonly cold convergent inaccessiblemem_or_argmemonly inaccessiblememonly inlinehint jumptable minsize naked nobuiltin noduplicate noimplicitfloat noinline nonlazybind norecurse noredzone noreturn nounwind optnone optsize readnone readonly returns_twice safestack sanitize_address sanitize_memory sanitize_thread ssp sspreq sspstrong uwtable writeonly section "foo" comdat($com1) align 8 gc "foo" prefix i32 42 prologue i32 42 personality i32 42 !foo !{!"bar"} !baz !{!"qux"} {
+define available_externally default dllimport ccc "foo" "bar"="baz" align 8 dereferenceable(11) dereferenceable_or_null(22) inreg noalias i32 @f89(i32 %x, i32 "foo" "bar"="baz" align 8 byval(i32) dereferenceable(11) dereferenceable_or_null(22) inalloca inreg nest noalias nocapture nonnull readnone readonly returned signext sret(i32) swifterror swiftself writeonly zeroext %y, ...) unnamed_addr "foo" "bar"="baz" #0 #1 alignstack(8) allocsize(16) allocsize(32, 64) alwaysinline argmemonly cold convergent inaccessiblemem_or_argmemonly inaccessiblememonly inlinehint jumptable minsize naked nobuiltin noduplicate noimplicitfloat noinline nonlazybind norecurse noredzone noreturn nounwind optnone optsize readnone readonly returns_twice safestack sanitize_address sanitize_memory sanitize_thread ssp sspreq sspstrong uwtable writeonly section "foo" comdat($com1) align 8 gc "foo" prefix i32 42 prologue i32 42 personality i32 42 !foo !{!"bar"} !baz !{!"qux"} {
 	ret i32 42
 }
 
