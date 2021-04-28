@@ -505,6 +505,7 @@ instance Pretty Terminator where
 
 instance Pretty Instruction where
   pretty = \case
+    FNeg {..}   -> "fneg" <+> (pretty fastMathFlags) <+> ppTyped operand0 <+> ppInstrMeta metadata
     Add {..}    -> ppInstrWithNuwNsw "add" nuw nsw operand0 operand1 metadata
     Sub {..}    -> ppInstrWithNuwNsw "sub" nuw nsw operand0 operand1 metadata
     Mul {..}    -> ppInstrWithNuwNsw "mul" nuw nsw operand0 operand1 metadata
@@ -794,7 +795,7 @@ instance Pretty DICompileUnit where
     , ("splitDebugInlining", Just (ppBoolean splitDebugInlining))
     , ("debugInfoForProfiling", Just (ppBoolean debugInfoForProfiling))
     , ("nameTableKind", Just (pretty nameTableKind))
-    , ("debugBaseAddress", Just (ppBoolean debugBaseAddress))
+    , ("rangesBaseAddress", Just (ppBoolean rangesBaseAddress))
     ]
 
 instance Pretty DebugEmissionKind where
