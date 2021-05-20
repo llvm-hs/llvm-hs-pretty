@@ -29,7 +29,7 @@ library
     bytestring           >= 0.1   && < 0.11,
     llvm-hs-pure         >= 12    && < 13,
     text                 >= 1.2   && < 2.0,
-    prettyprinter        >= 1.6   && < 1.7
+    prettyprinter        >= 1.6
 
 Test-suite test
   type:                exitcode-stdio-1.0
