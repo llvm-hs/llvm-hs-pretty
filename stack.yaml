@@ -13,4 +13,4 @@ flags:
     shared-llvm: true
 
 ghc-options:
-  llvm-hs: -optcxx=-std=c++11
+  llvm-hs: -optcxx=-std=c++14
