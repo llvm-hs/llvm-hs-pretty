@@ -1,5 +1,4 @@
-#resolver: lts-17.12
-resolver: snapshot.yaml
+resolver: lts-17.12
 
 packages:
 - '.'
@@ -7,6 +6,13 @@ packages:
 #extra-deps:
 #- llvm-hs-9.0.1.1
 #- llvm-hs-pure-9.0.1.1
+
+extra-deps:
+- git: git@github.com:llvm-hs/llvm-hs.git
+  commit: f9fbb35fc6c393e311c2d50935130b6202c17270
+  subdirs:
+  - llvm-hs
+  - llvm-hs-pure
 
 flags:
   llvm-hs:
