@@ -41,6 +41,7 @@ import LLVM.AST.Operand hiding (DIGLobalVariable(..), GlobalVariable, Module, No
 import qualified LLVM.AST.Operand as O
 import LLVM.AST.ParameterAttribute as PA
 import LLVM.AST.FunctionAttribute as FA
+import LLVM.IRBuilder.Module
 
 import Data.String
 
@@ -1396,3 +1397,9 @@ ppllvm = renderLazy . layoutPretty ppLayoutOptions . pretty
 -- | Pretty print a printable LLVM expression
 ppll :: Pretty a => a -> Text
 ppll = renderLazy . layoutPretty ppLayoutOptions . pretty
+
+-- | Pretty print a printable LLVM expression that can reference module state
+ppllm :: (Pretty a, MonadModuleBuilder m) => a -> m Text
+ppllm x = do
+  x' <- pretty x
+  return $ renderLazy $ layoutPretty ppLayoutOptions x'

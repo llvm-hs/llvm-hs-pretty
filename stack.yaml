@@ -1,12 +1,16 @@
-resolver: lts-14.0
+#resolver: lts-17.12
+resolver: snapshot.yaml
+
 packages:
 - '.'
 
-extra-deps:
-- llvm-hs-9.0.0
-- llvm-hs-pure-9.0.0
+#extra-deps:
+#- llvm-hs-9.0.1.1
+#- llvm-hs-pure-9.0.1.1
 
 flags:
   llvm-hs:
     shared-llvm: true
 
+ghc-options:
+  llvm-hs: -optcxx=-std=c++11 -optcxx=-lstdc++ -optcxx=-fno-rtti -optcxx=-Wno-init-list-lifetime -optcxx=-Wno-stringop-overflow
