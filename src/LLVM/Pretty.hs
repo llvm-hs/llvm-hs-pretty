@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# OPTIONS_GHC -fwarn-incomplete-patterns #-}
 {-# OPTIONS_GHC -fwarn-incomplete-uni-patterns #-}
@@ -41,7 +42,7 @@ import LLVM.AST.Operand hiding (DIGLobalVariable(..), GlobalVariable, Module, No
 import qualified LLVM.AST.Operand as O
 import LLVM.AST.ParameterAttribute as PA
 import LLVM.AST.FunctionAttribute as FA
-import LLVM.IRBuilder.Module
+import LLVM.IRBuilder.Module hiding (global)
 
 import Data.String
 
@@ -171,6 +172,17 @@ ppBoolean :: Bool -> Doc ann
 ppBoolean True = "true"
 ppBoolean False = "false"
 
+-- print an operand and its type
+ppTyped :: (MonadModuleBuilder m, Pretty a, Typed a) => a -> m (Doc ann)
+ppTyped a = do
+  ta <- typeOf a
+  return $ pretty ta <+> pretty a
+
+ppCommaTyped :: (MonadModuleBuilder m, Pretty a, Typed a) => a -> m (Doc ann)
+ppCommaTyped a = do
+  ta <- typeOf a
+  return $ pretty ta `cma` pretty a
+
 instance Pretty Name where
   pretty (Name nm)
     | BS.null nm = dquotes mempty
@@ -232,49 +244,50 @@ instance Pretty Type where
   pretty TokenType = "token"
   pretty LabelType = "label"
 
-instance Pretty Global where
-  pretty Function {..} =
+ppGlobal :: MonadModuleBuilder m => Global -> m (Doc ann)
+ppGlobal g
+  | Function {..} <- g = do
+      pre <- case prefix of
+               Nothing  -> pure mempty
+               Just con -> do
+                 ppCon <- ppTyped con
+                 return $ "prefix" <+> ppCon
+      let align = if alignment == 0 then mempty
+                  else "align" <+> pretty alignment
+      let gcName = maybe mempty (\n -> "gc" <+> dquotes (pretty $ pack n)) (fmap unShort garbageCollectorName)
       case basicBlocks of
         [] ->
-          ("declare" <+> pretty linkage <+> pretty callingConvention
+          return $ ("declare" <+> pretty linkage <+> pretty callingConvention
             <+> ppReturnAttributes returnAttributes <+> pretty returnType <+> global (pretty name)
             <> ppParams (pretty . typeOf) parameters <+> ppFunctionAttributes functionAttributes <+> align <+> gcName <+> pre)
 
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
-            ("define" <+> pretty linkage <+> pretty callingConvention
-              <+> ppReturnAttributes returnAttributes <+> pretty returnType <+> global (pretty name)
-              <> ppParams pretty parameters <+> ppFunctionAttributes functionAttributes <+> align <+> gcName <+> pre)
-            `wrapbraces` (indent 2 $ ppSingleBlock b)
+          return $ ("define" <+> pretty linkage <+> pretty callingConvention
+            <+> ppReturnAttributes returnAttributes <+> pretty returnType <+> global (pretty name)
+            <> ppParams pretty parameters <+> ppFunctionAttributes functionAttributes <+> align <+> gcName <+> pre)
+          `wrapbraces` (indent 2 $ ppSingleBlock b)
 
         bs ->
-          ("define" <+> pretty linkage <+> pretty callingConvention
+          return $ ("define" <+> pretty linkage <+> pretty callingConvention
             <+> ppReturnAttributes returnAttributes <+> pretty returnType <+> global (pretty name)
             <> ppParams pretty parameters <+> ppFunctionAttributes functionAttributes <+> align <+> gcName <+> pre)
           `wrapbraces` (vcat $ fmap pretty bs)
-    where
-      pre = case prefix of
-              Nothing  -> mempty
-              Just con -> "prefix" <+> ppTyped con
-      align | alignment == 0    = mempty
-            | otherwise = "align" <+> pretty alignment
-      gcName = maybe mempty (\n -> "gc" <+> dquotes (pretty $ pack n)) (fmap unShort garbageCollectorName)
 
-  pretty GlobalVariable {..} = global (pretty name) <+> "=" <+> ppLinkage hasInitializer linkage <+> ppMaybe unnamedAddr
-                             <+> addrSpace' <+> kind <+> pretty type' <+> ppMaybe initializer <> ppAlign alignment
-    where
-      hasInitializer = isJust initializer
-      addrSpace' =
-        case addrSpace of
-          AS.AddrSpace addr
-            | addr == 0 -> mempty
-            | otherwise -> "addrspace" <> parens (pretty addr)
-      kind | isConstant = "constant"
-           | otherwise  = "global"
+  | GlobalVariable {..} <- g = do
+      let hasInitializer = isJust initializer
+      let addrSpace' = case addrSpace of
+                         AS.AddrSpace addr
+                           | addr == 0 -> mempty
+                           | otherwise -> "addrspace" <> parens (pretty addr)
+      let kind = if isConstant then "constant" else "global"
+      return $ global (pretty name) <+> "=" <+> ppLinkage hasInitializer linkage <+> ppMaybe unnamedAddr
+               <+> addrSpace' <+> kind <+> pretty type' <+> ppMaybe initializer <> ppAlign alignment
 
-  pretty GlobalAlias {..} = global (pretty name) <+> "=" <+> pretty linkage <+> ppMaybe unnamedAddr <+> "alias" <+> pretty typ `cma` ppTyped aliasee
-    where
-      typ = getElementType type'
+  | GlobalAlias {} <- g = do
+    let typ = getElementType $ LLVM.AST.Global.type' g
+    prettyAliasee <- ppTyped aliasee
+    return $ global (pretty $ LLVM.AST.Global.name g) <+> "=" <+> pretty (linkage g) <+> ppMaybe (unnamedAddr g) <+> "alias" <+> pretty typ `cma` prettyAliasee
 
 ppFunctionAttribute :: Either GroupID FunctionAttribute -> Doc ann
 ppFunctionAttribute (Left grpId) = pretty grpId
@@ -1276,13 +1289,6 @@ ppAlign :: Word32 -> Doc ann
 ppAlign x | x == 0    = mempty
           | otherwise = ", align" <+> pretty x
 
--- print an operand and its type
-ppTyped :: (Pretty a, Typed a) => a -> Doc ann
-ppTyped a = pretty (typeOf a) <+> pretty a
-
-ppCommaTyped :: (Pretty a, Typed a) => a -> Doc ann
-ppCommaTyped a = pretty (typeOf a) `cma` pretty a
-
 phiIncoming :: (Operand, Name) -> Doc ann
 phiIncoming (op, nm) = brackets (pretty op `cma` (local' (pretty nm)))
 
@@ -1397,9 +1403,3 @@ ppllvm = renderLazy . layoutPretty ppLayoutOptions . pretty
 -- | Pretty print a printable LLVM expression
 ppll :: Pretty a => a -> Text
 ppll = renderLazy . layoutPretty ppLayoutOptions . pretty
-
--- | Pretty print a printable LLVM expression that can reference module state
-ppllm :: (Pretty a, MonadModuleBuilder m) => a -> m Text
-ppllm x = do
-  x' <- pretty x
-  return $ renderLazy $ layoutPretty ppLayoutOptions x'
