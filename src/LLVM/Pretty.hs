@@ -70,6 +70,7 @@ import Numeric (showHex)
 import Data.Array.Unsafe
 import Data.Array.MArray
 import Data.Array.ST
+import Control.Monad (liftM)
 import Control.Monad.ST
 
 -------------------------------------------------------------------------------
@@ -143,6 +144,12 @@ ppTyped a = do
   ta <- typeOf a
   return $ pretty ta <+> pretty a
 
+ppTypedM :: (MonadModuleBuilder m, Typed a) => (a -> m (Doc ann)) -> a -> m (Doc ann)
+ppTypedM pp a = do
+  ta <- typeOf a
+  prettyA <- pp a
+  return $ pretty ta <+> prettyA
+
 ppCommaTyped :: (MonadModuleBuilder m, Pretty a, Typed a) => a -> m (Doc ann)
 ppCommaTyped a = do
   ta <- typeOf a
@@ -167,8 +174,23 @@ instance Pretty Parameter where
 ppParamAttributes :: [ParameterAttribute] -> Doc ann
 ppParamAttributes pas = hsep $ fmap pretty pas
 
-ppArguments :: (Operand, [ParameterAttribute]) -> Doc ann
-ppArguments (op, attrs) = pretty (typeOf op) <+> ppParamAttributes attrs <+> pretty op
+ppArguments :: MonadModuleBuilder m => (Operand, [ParameterAttribute]) -> m (Doc ann)
+ppArguments (op, attrs) = do
+  tOp <- typeOf op
+  prettyOp <- ppOperand op
+  return $ pretty tOp <+> ppParamAttributes attrs <+> prettyOp
+
+ppParams :: (a -> Doc ann) -> ([a], Bool) -> Doc ann
+ppParams ppParam (ps, varrg) = parens . commas $ fmap ppParam ps ++ vargs
+  where
+    vargs = if varrg then ["..."] else []
+
+ppParamsM :: MonadModuleBuilder m => (a -> m (Doc ann)) -> ([a], Bool) -> m (Doc ann)
+ppParamsM ppParam (ps, varrg) = do
+  prettyParams <- mapM ppParam ps
+  return $ parens $ commas $ prettyParams ++ vargs
+  where
+    vargs = if varrg then ["..."] else []
 
 instance Pretty UnnamedAddr where
   pretty LocalAddr = "local_unnamed_addr"
@@ -204,29 +226,31 @@ ppGlobal g
       pre <- case prefix of
                Nothing  -> pure mempty
                Just con -> do
-                 ppCon <- ppTyped con
+                 ppCon <- ppConstant con
                  return $ "prefix" <+> ppCon
       let align = if alignment == 0 then mempty
                   else "align" <+> pretty alignment
       let gcName = maybe mempty (\n -> "gc" <+> dquotes (pretty $ pack n)) (fmap unShort garbageCollectorName)
       case basicBlocks of
-        [] ->
+        [] -> do
+          prettyParams <- ppParamsM (liftM pretty . typeOf) parameters
           return $ ("declare" <+> pretty linkage <+> pretty callingConvention
             <+> ppReturnAttributes returnAttributes <+> pretty returnType <+> global (pretty name)
-            <> ppParams (pretty . typeOf) parameters <+> ppFunctionAttributes functionAttributes <+> align <+> gcName <+> pre)
+            <> prettyParams <+> ppFunctionAttributes functionAttributes <+> align <+> gcName <+> pre)
 
         -- single unnamed block is special cased, and won't parse otherwise... yeah good times
         [b@(BasicBlock (UnName _) _ _)] ->
-          return $ ("define" <+> pretty linkage <+> pretty callingConvention
-            <+> ppReturnAttributes returnAttributes <+> pretty returnType <+> global (pretty name)
-            <> ppParams pretty parameters <+> ppFunctionAttributes functionAttributes <+> align <+> gcName <+> pre)
-          `wrapbraces` (indent 2 $ ppSingleBlock b)
+          return $ (("define" <+> pretty linkage <+> pretty callingConvention
+                              <+> ppReturnAttributes returnAttributes <+> pretty returnType <+> global (pretty name)
+                              <> ppParams pretty parameters <+> ppFunctionAttributes functionAttributes <+> align <+> gcName <+> pre)
+                    `wrapbraces` (indent 2 $ ppSingleBlock b))
 
-        bs ->
-          return $ ("define" <+> pretty linkage <+> pretty callingConvention
-            <+> ppReturnAttributes returnAttributes <+> pretty returnType <+> global (pretty name)
-            <> ppParams pretty parameters <+> ppFunctionAttributes functionAttributes <+> align <+> gcName <+> pre)
-          `wrapbraces` (vcat $ fmap pretty bs)
+        bs -> do
+          prettyBBs <- mapM ppBasicBlock bs
+          return $ (("define" <+> pretty linkage <+> pretty callingConvention
+                              <+> ppReturnAttributes returnAttributes <+> pretty returnType <+> global (pretty name)
+                              <> ppParams pretty parameters <+> ppFunctionAttributes functionAttributes <+> align <+> gcName <+> pre)
+                    `wrapbraces` (vcat prettyBBs))
 
   | GlobalVariable {..} <- g = do
       let hasInitializer = isJust initializer
@@ -235,12 +259,13 @@ ppGlobal g
                            | addr == 0 -> mempty
                            | otherwise -> "addrspace" <> parens (pretty addr)
       let kind = if isConstant then "constant" else "global"
+      prettyInit <- case initializer of { Just x -> ppConstant x; Nothing -> pure mempty }
       return $ global (pretty name) <+> "=" <+> ppLinkage hasInitializer linkage <+> ppMaybe unnamedAddr
-               <+> addrSpace' <+> kind <+> pretty type' <+> ppMaybe initializer <> ppAlign alignment
+               <+> addrSpace' <+> kind <+> pretty type' <+> prettyInit <> ppAlign alignment
 
   | GlobalAlias {} <- g = do
     let typ = getElementType $ LLVM.AST.Global.type' g
-    prettyAliasee <- ppTyped aliasee
+    prettyAliasee <- ppConstant $ LLVM.AST.Global.aliasee g
     return $ global (pretty $ LLVM.AST.Global.name g) <+> "=" <+> pretty (linkage g) <+> ppMaybe (unnamedAddr g) <+> "alias" <+> pretty typ `cma` prettyAliasee
 
 ppFunctionAttribute :: Either GroupID FunctionAttribute -> Doc ann
@@ -250,18 +275,21 @@ ppFunctionAttribute (Right fA) = pretty fA
 ppFunctionAttributes :: [Either GroupID FunctionAttribute] -> Doc ann
 ppFunctionAttributes attribs = hsep $ fmap ppFunctionAttribute attribs
 
-ppMaybeMetadata :: Maybe Metadata -> Doc ann
-ppMaybeMetadata Nothing = "null"
-ppMaybeMetadata (Just m) = pretty m
+ppMaybeMetadata :: MonadModuleBuilder m => Maybe Metadata -> m (Doc ann)
+ppMaybeMetadata Nothing = pure "null"
+ppMaybeMetadata (Just m) = ppMetadata m
 
-instance Pretty Definition where
-  pretty (GlobalDefinition x) = pretty x
-  pretty (TypeDefinition nm ty) = local' (pretty nm) <+> "=" <+> "type" <+> maybe "opaque" pretty ty
-  pretty (FunctionAttributes gid attrs) = "attributes" <+> pretty gid <+> "=" <+> braces (hsep (fmap ppAttrInGroup attrs))
-  pretty (NamedMetadataDefinition nm meta) = "!" <> short nm <+> "=" <+> "!" <> braces (commas (fmap pretty meta))
-  pretty (MetadataNodeDefinition node meta) = pretty node <+> "=" <+> pretty meta
-  pretty (ModuleInlineAssembly asm) = "module asm" <+> dquotes (pretty (pack (BL.unpack asm)))
-  pretty (COMDAT name selKind) = "$" <> short name <+> "=" <+> "comdat" <+> pretty selKind
+ppDefinition :: MonadModuleBuilder m => Definition -> m (Doc ann)
+ppDefinition d
+  | GlobalDefinition x <- d = ppGlobal x
+  | TypeDefinition nm ty <- d = return $ local' (pretty nm) <+> "=" <+> "type" <+> maybe "opaque" pretty ty
+  | FunctionAttributes gid attrs <- d = return $ "attributes" <+> pretty gid <+> "=" <+> braces (hsep (fmap ppAttrInGroup attrs))
+  | NamedMetadataDefinition nm meta <- d = return $ "!" <> short nm <+> "=" <+> "!" <> braces (commas (fmap pretty meta))
+  | MetadataNodeDefinition node meta <- d = do
+      prettyMeta <- ppMDNode meta
+      return $ pretty node <+> "=" <+> prettyMeta
+  | ModuleInlineAssembly asm <- d = return $ "module asm" <+> dquotes (pretty (pack (BL.unpack asm)))
+  | COMDAT name selKind <- d = return $ "$" <> short name <+> "=" <+> "comdat" <+> pretty selKind
 
 instance Pretty SelectionKind where
   pretty Any = "any"
@@ -405,40 +433,39 @@ ppLinkage omitExternal = \case
    L.LinkOnceODR             -> "linkonce_odr"
    L.WeakODR                 -> "weak_odr"
 
-ppInstructionMetadata :: InstructionMetadata -> Doc ann
-ppInstructionMetadata meta = commas ["!" <> short x <+> pretty y | (x,y) <- meta]
-
 instance Pretty MetadataNodeID where
   pretty (MetadataNodeID x) = "!" <> pretty ((fromIntegral x) :: Int)
 
 instance Pretty GroupID where
   pretty (GroupID x) = "#" <> pretty ((fromIntegral x) :: Int)
 
-instance Pretty BasicBlock where
-  pretty (BasicBlock nm instrs term) =
-    label <> P.line <> indent 2 (vcat $ (fmap pretty instrs) ++ [pretty term])
-    where
-      label = case nm of
-        UnName _ -> "; <label>:" <> pretty nm <> ":"
-        _ -> pretty nm <> ":"
+ppBasicBlock :: MonadModuleBuilder m => BasicBlock -> m (Doc ann)
+ppBasicBlock (BasicBlock nm instrs term) = do
+  prettyInstrs <- mapM (ppNamed ppInstruction) instrs
+  prettyTerm <- ppNamed ppTerminator term
+  return $ label <> P.line <> indent 2 (vcat $ prettyInstrs ++ [prettyTerm])
+  where
+    label = case nm of
+      UnName _ -> "; <label>:" <> pretty nm <> ":"
+      _ -> pretty nm <> ":"
 
 ppTerminator :: MonadModuleBuilder m => Terminator -> m (Doc ann)
 ppTerminator t
   | Br dest meta <- t = return $ "br" <+> label (pretty dest) <+> ppInstrMeta meta
   | Ret val meta <- t = do
-      prettyVal <- maybe (pure "void") ppTyped val
+      prettyVal <- maybe (pure "void") (ppTypedM ppOperand) val
       return $ "ret" <+> prettyVal <+> ppInstrMeta meta
 
   | CondBr cond tdest fdest meta <- t = do
-      prettyCond <- ppTyped cond
+      prettyCond <- ppTypedM ppOperand cond
       return $ "br" <+> prettyCond
                `cma` label (pretty tdest)
                `cma` label (pretty fdest)
                <+> ppInstrMeta meta
 
   | Switch {..} <- t = do
-      prettyOperand0' <- ppTyped operand0'
-      prettyDests <- mapM (\(v,l) -> do prettyV <- ppTyped v
+      prettyOperand0' <- ppTypedM ppOperand operand0'
+      prettyDests <- mapM (\(v,l) -> do prettyV <- ppTypedM ppConstant v
                                         return $ prettyV `cma` label (pretty l)) dests
       return $ "switch" <+> prettyOperand0'
                `cma` label (pretty defaultDest)
@@ -448,36 +475,43 @@ ppTerminator t
   | Unreachable {..} <- t = return $ "unreachable" <+> ppInstrMeta metadata'
 
   | IndirectBr op dests meta <- t = do
-      prettyOp <- ppTyped op
+      prettyOp <- ppTypedM ppOperand op
       return $ "indirectbr" <+> prettyOp `cma`
                brackets (hsep [ label (pretty l) | l <- dests ])
                <+> ppInstrMeta meta
 
   | Invoke {..} <- t = do
-     return $ ppInvoke t
-              <+> "to" <+> label (pretty returnDest)
-              <+> "unwind" <+> label (pretty exceptionDest)
-              <+> ppInstrMeta metadata'
+      prettyInv <- ppInvoke t
+      return $ prettyInv
+               <+> "to" <+> label (pretty returnDest)
+               <+> "unwind" <+> label (pretty exceptionDest)
+               <+> ppInstrMeta metadata'
 
   | Resume op meta <- t = do
-      prettyOp <- ppTyped op
+      prettyOp <- ppTypedM ppOperand op
       return $ "resume "<+> prettyOp <+> ppInstrMeta meta
 
-  | CleanupRet pad dest meta <- t = return $ "cleanupret" <+> "from"
-                                             <+> pretty pad <+> "unwind"
-                                             <+> maybe "to caller" (label . pretty) dest
-                                             <+> ppInstrMeta meta
+  | CleanupRet pad dest meta <- t = do
+      prettyPad <- ppOperand pad
+      return $ "cleanupret" <+> "from"
+                            <+> prettyPad <+> "unwind"
+                            <+> maybe "to caller" (label . pretty) dest
+                            <+> ppInstrMeta meta
 
-  | CatchRet catchPad succ meta <- t = return $ "catchret" <+> "from"
-                                                <+> pretty catchPad
-                                                <+> "to" <+> label (pretty succ)
-                                                <+> ppInstrMeta meta
+  | CatchRet catchPad succ meta <- t = do
+      prettyPad <- ppOperand catchPad
+      return $ "catchret" <+> "from"
+                          <+> prettyPad
+                          <+> "to" <+> label (pretty succ)
+                          <+> ppInstrMeta meta
 
-  | CatchSwitch {..} <- t = return $ "catchswitch" <+> "within" <+> pretty parentPad'
-                                     <+> brackets (commas (map (label . pretty) (toList catchHandlers)))
-                                     <+> "unwind" <+> "to"
-                                     <+> maybe "caller" pretty defaultUnwindDest
-                                     <+> ppInstrMeta metadata'
+  | CatchSwitch {..} <- t = do
+      prettyPad <- ppOperand parentPad'
+      return $ "catchswitch" <+> "within" <+> prettyPad
+                             <+> brackets (commas (map (label . pretty) (toList catchHandlers)))
+                             <+> "unwind" <+> "to"
+                             <+> maybe "caller" pretty defaultUnwindDest
+                             <+> ppInstrMeta metadata'
 
 ppInstruction :: MonadModuleBuilder m => Instruction -> m (Doc ann)
 ppInstruction i
@@ -488,118 +522,123 @@ ppInstruction i
   | AShr {..}   <- i = ppInstrWithExact "ashr" exact operand0 operand1 metadata
   | LShr {..}   <- i = ppInstrWithExact "lshr" exact operand0 operand1 metadata
 
-  | And {..}    <- i = do { prettyOp0 <- ppTyped operand0; return $ "and"  <+> prettyOp0 `cma` pretty operand1 <+> ppInstrMeta metadata }
-  | Or {..}     <- i = do { prettyOp0 <- ppTyped operand0; return $ "or"   <+> prettyOp0 `cma` pretty operand1 <+> ppInstrMeta metadata }
-  | Xor {..}    <- i = do { prettyOp0 <- ppTyped operand0; return $ "xor"  <+> prettyOp0 `cma` pretty operand1 <+> ppInstrMeta metadata }
+  | And {..}    <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; prettyOp1 <- ppOperand operand1; return $ "and"  <+> prettyOp0 `cma` prettyOp1 <+> ppInstrMeta metadata }
+  | Or {..}     <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; prettyOp1 <- ppOperand operand1; return $ "or"   <+> prettyOp0 `cma` prettyOp1 <+> ppInstrMeta metadata }
+  | Xor {..}    <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; prettyOp1 <- ppOperand operand1; return $ "xor"  <+> prettyOp0 `cma` prettyOp1 <+> ppInstrMeta metadata }
   | SDiv {..}   <- i = ppInstrWithExact "sdiv" exact operand0 operand1 metadata
   | UDiv {..}   <- i = ppInstrWithExact "udiv" exact operand0 operand1 metadata
-  | SRem {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "srem"  <+> prettyOp0 `cma` pretty operand1 <+> ppInstrMeta metadata }
-  | URem {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "urem"  <+> prettyOp0 `cma` pretty operand1 <+> ppInstrMeta metadata }
+  | SRem {..}   <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; prettyOp1 <- ppOperand operand1; return $ "srem"  <+> prettyOp0 `cma` prettyOp1 <+> ppInstrMeta metadata }
+  | URem {..}   <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; prettyOp1 <- ppOperand operand1; return $ "urem"  <+> prettyOp0 `cma` prettyOp1 <+> ppInstrMeta metadata }
 
-  | FAdd {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "fadd" <+> (pretty fastMathFlags) <+> prettyOp0 `cma` pretty operand1 <+> ppInstrMeta metadata }
-  | FSub {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "fsub" <+> (pretty fastMathFlags) <+> prettyOp0 `cma` pretty operand1 <+> ppInstrMeta metadata }
-  | FMul {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "fmul" <+> (pretty fastMathFlags) <+> prettyOp0 `cma` pretty operand1 <+> ppInstrMeta metadata }
-  | FDiv {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "fdiv" <+> (pretty fastMathFlags) <+> prettyOp0 `cma` pretty operand1 <+> ppInstrMeta metadata }
-  | FRem {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "frem" <+> (pretty fastMathFlags) <+> prettyOp0 `cma` pretty operand1 <+> ppInstrMeta metadata }
-  | FCmp {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "fcmp" <+> pretty fpPredicate <+> prettyOp0 `cma` pretty operand1 <+> ppInstrMeta metadata }
+  | FAdd {..}   <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; prettyOp1 <- ppOperand operand1; return $ "fadd" <+> (pretty fastMathFlags) <+> prettyOp0 `cma` prettyOp1 <+> ppInstrMeta metadata }
+  | FSub {..}   <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; prettyOp1 <- ppOperand operand1; return $ "fsub" <+> (pretty fastMathFlags) <+> prettyOp0 `cma` prettyOp1 <+> ppInstrMeta metadata }
+  | FMul {..}   <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; prettyOp1 <- ppOperand operand1; return $ "fmul" <+> (pretty fastMathFlags) <+> prettyOp0 `cma` prettyOp1 <+> ppInstrMeta metadata }
+  | FDiv {..}   <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; prettyOp1 <- ppOperand operand1; return $ "fdiv" <+> (pretty fastMathFlags) <+> prettyOp0 `cma` prettyOp1 <+> ppInstrMeta metadata }
+  | FRem {..}   <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; prettyOp1 <- ppOperand operand1; return $ "frem" <+> (pretty fastMathFlags) <+> prettyOp0 `cma` prettyOp1 <+> ppInstrMeta metadata }
+  | FCmp {..}   <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; prettyOp1 <- ppOperand operand1; return $ "fcmp" <+> pretty fpPredicate <+> prettyOp0 `cma` prettyOp1 <+> ppInstrMeta metadata }
 
   | Alloca {..} <- i = do
       num <- case numElements of Nothing -> pure mempty
-                                 Just o -> do { prettyO <- ppTyped o; return $ "," <+> prettyO }
+                                 Just o -> do { prettyO <- ppTypedM ppOperand o; return $ "," <+> prettyO }
       return $ "alloca" <+> pretty allocatedType <> num <> ppAlign alignment <+> ppInstrMeta metadata
   | Store {..}  <- i = do
-      prettyValue <- ppTyped value
-      prettyAddr <- ppTyped address
+      prettyValue <- ppTypedM ppOperand value
+      prettyAddr <- ppTypedM ppOperand address
       return $ "store" <+> ppMAtomicity maybeAtomicity <+> ppVolatile volatile <+> prettyValue `cma` prettyAddr <+> ppMOrdering maybeAtomicity <> ppAlign alignment <+> ppInstrMeta metadata
   | Load {..}   <- i = do
       ta <-typeOf address
       let argTy = case ta of
                     PointerType {} -> pointerReferent argTy
                     _ -> error "invalid load of non-pointer type. (Malformed AST)"
-      prettyAddr <- ppTyped address
+      prettyAddr <- ppTypedM ppOperand address
       return $ "load" <+> ppMAtomicity maybeAtomicity <+> ppVolatile volatile <+> pretty argTy `cma` prettyAddr <+> ppMOrdering maybeAtomicity <> ppAlign alignment <+> ppInstrMeta metadata
 
   | Phi {..}    <- i = return $ "phi" <+> pretty type' <+> commas (fmap phiIncoming incomingValues) <+> ppInstrMeta metadata
 
-  | ICmp {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "icmp" <+> pretty iPredicate <+> prettyOp0 `cma` pretty operand1 <+> ppInstrMeta metadata }
+  | ICmp {..}   <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; prettyOp1 <- ppTypedM ppOperand operand1; return $ "icmp" <+> pretty iPredicate <+> prettyOp0 `cma` prettyOp1 <+> ppInstrMeta metadata }
 
-  | Call {..} <- i = return $ ppCall i <+> ppInstrMeta metadata
+  | Call {..} <- i = do
+      prettyCall <- ppCall i
+      return $ prettyCall <+> ppInstrMeta metadata
   | Select {..} <- i = do
-      prettyCond <- ppTyped condition'
-      prettyTrue <- ppTyped trueValue
-      prettyFalse <- ppTyped falseValue
+      prettyCond  <- ppTypedM ppOperand condition'
+      prettyTrue  <- ppTypedM ppOperand trueValue
+      prettyFalse <- ppTypedM ppOperand falseValue
       return $ "select" <+> commas [prettyCond, prettyTrue, prettyFalse] <+> ppInstrMeta metadata
-  | SExt {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "sext" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata }
-  | ZExt {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "zext" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata }
-  | FPExt {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "fpext" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata }
-  | Trunc {..}  <- i = do { prettyOp0 <- ppTyped operand0; return $ "trunc" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata }
-  | FPTrunc {..}  <- i = do { prettyOp0 <- ppTyped operand0; return $ "fptrunc" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata }
+  | SExt {..}     <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; return $ "sext" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata }
+  | ZExt {..}     <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; return $ "zext" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata }
+  | FPExt {..}    <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; return $ "fpext" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata }
+  | Trunc {..}    <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; return $ "trunc" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata }
+  | FPTrunc {..}  <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; return $ "fptrunc" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata <+> ppInstrMeta metadata }
 
   | GetElementPtr {..} <- i = do
       ta <-typeOf address
       let argTy = getElementType ta
-      prettyAIs <- mapM ppTyped (address:indices)
+      prettyAIs <- mapM (ppTypedM ppOperand) (address:indices)
       return $ "getelementptr" <+> bounds inBounds <+> commas (pretty argTy : prettyAIs) <+> ppInstrMeta metadata
 
   | ExtractValue {..} <- i = do
-      prettyAgg <- ppTyped aggregate
+      prettyAgg <- ppTypedM ppOperand aggregate
       return $ "extractvalue" <+> commas (prettyAgg : fmap pretty indices') <+> ppInstrMeta metadata
 
-  | BitCast {..}  <- i = do { prettyOp0 <- ppTyped operand0; return $ "bitcast" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata }
-  | FPToUI {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "fptoui" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata }
-  | FPToSI {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "fptosi" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata }
-  | UIToFP {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "uitofp" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata }
-  | SIToFP {..}   <- i = do { prettyOp0 <- ppTyped operand0; return $ "sitofp" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata }
-  | PtrToInt {..} <- i = do { prettyOp0 <- ppTyped operand0; return $ "ptrtoint" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata }
-  | IntToPtr {..} <- i = do { prettyOp0 <- ppTyped operand0; return $ "inttoptr" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata }
+  | BitCast {..}  <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; return $ "bitcast" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata }
+  | FPToUI {..}   <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; return $ "fptoui" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata }
+  | FPToSI {..}   <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; return $ "fptosi" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata }
+  | UIToFP {..}   <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; return $ "uitofp" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata }
+  | SIToFP {..}   <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; return $ "sitofp" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata }
+  | PtrToInt {..} <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; return $ "ptrtoint" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata }
+  | IntToPtr {..} <- i = do { prettyOp0 <- ppTypedM ppOperand operand0; return $ "inttoptr" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata }
 
   | InsertElement {..} <- i = do
-      prettyVec <- ppTyped vector
-      prettyElt <- ppTyped element
-      prettyInd <- ppTyped index
+      prettyVec <- ppTypedM ppOperand vector
+      prettyElt <- ppTypedM ppOperand element
+      prettyInd <- ppTypedM ppOperand index
       return $ "insertelement" <+> commas [prettyVec, prettyElt, prettyInd] <+> ppInstrMeta metadata
   | ShuffleVector {..} <- i = do
-      prettyOp0 <- ppTyped operand0
-      prettyOp1 <- ppTyped operand1
-      prettyMask <- ppTyped mask
+      prettyOp0 <- ppTypedM ppOperand operand0
+      prettyOp1 <- ppTypedM ppOperand operand1
+      prettyMask <- ppTypedM ppConstant mask
       return $ "shufflevector" <+> commas [prettyOp0, prettyOp1, prettyMask] <+> ppInstrMeta metadata
   | ExtractElement {..} <- i = do
-      prettyVec <- ppTyped vector
-      prettyInd <- ppTyped index
+      prettyVec <- ppTypedM ppOperand vector
+      prettyInd <- ppTypedM ppOperand index
       return $ "extractelement" <+> commas [prettyVec, prettyInd] <+> ppInstrMeta metadata
   | InsertValue {..} <- i = do
-      prettyAgg <- ppTyped aggregate
-      prettyElt <- ppTyped element
+      prettyAgg <- ppTypedM ppOperand aggregate
+      prettyElt <- ppTypedM ppOperand element
       return $ "insertvalue" <+> commas (prettyAgg : prettyElt : fmap pretty indices') <+> ppInstrMeta metadata
 
   | Fence {..} <- i = return $ "fence" <+> ppAtomicity atomicity <+> ppInstrMeta metadata
   | AtomicRMW {..} <- i = do
-      prettyAddr <- ppTyped address
-      prettyVal <- ppTyped value
+      prettyAddr <- ppTypedM ppOperand address
+      prettyVal <- ppTypedM ppOperand value
       return $ "atomicrmw" <+> ppVolatile volatile <+> pretty rmwOperation <+> prettyAddr `cma` prettyVal <+> ppAtomicity atomicity  <+> ppInstrMeta metadata
   | CmpXchg {..} <- i = do
-      prettyAddr <- ppTyped address
-      prettyExp <- ppTyped expected
-      prettyRep <- ppTyped replacement
+      prettyAddr <- ppTypedM ppOperand address
+      prettyExp <- ppTypedM ppOperand expected
+      prettyRep <- ppTypedM ppOperand replacement
       return $ "cmpxchg" <+> ppVolatile volatile <+> prettyAddr `cma` prettyExp `cma` prettyRep
                <+> ppAtomicity atomicity <+> pretty failureMemoryOrdering <+> ppInstrMeta metadata
 
   | AddrSpaceCast {..} <- i = do
-      prettyOp0 <- ppTyped operand0
+      prettyOp0 <- ppTypedM ppOperand operand0
       return $ "addrspacecast" <+> prettyOp0 <+> "to" <+> pretty type' <+> ppInstrMeta metadata
   | VAArg {..} <- i = do
-      prettyArgList <- ppTyped argList
+      prettyArgList <- ppTypedM ppOperand argList
       return $ "va_arg" <+> prettyArgList `cma` pretty type' <+> ppInstrMeta metadata
 
-  | LandingPad {..} <- i = return $
-      "landingpad" <+> pretty type' <+> ppBool "cleanup" cleanup <+> ppInstrMeta metadata
-      <+> commas (fmap pretty clauses)
+  | LandingPad {..} <- i = do
+      prettyClauses <- mapM ppLandingPadClause clauses
+      return $ "landingpad" <+> pretty type' <+> ppBool "cleanup" cleanup <+> ppInstrMeta metadata
+                            <+> commas prettyClauses
   | CatchPad {..} <- i = do
-      prettyArgs <- mapM ppTyped args
-      return $ "catchpad" <+> "within" <+> pretty catchSwitch <+> brackets (commas prettyArgs) <+> ppInstrMeta metadata
+      prettyArgs <- mapM (ppTypedM ppOperand) args
+      prettyCS <- ppOperand catchSwitch
+      return $ "catchpad" <+> "within" <+> prettyCS <+> brackets (commas prettyArgs) <+> ppInstrMeta metadata
   | CleanupPad {..} <- i = do
-      prettyArgs <- mapM ppTyped args
-      return $ "cleanuppad" <+> "within" <+> pretty parentPad <+> brackets (commas prettyArgs) <+> ppInstrMeta metadata
+      prettyArgs <- mapM (ppTypedM ppOperand) args
+      prettyPP <- ppOperand parentPad
+      return $ "cleanuppad" <+> "within" <+> prettyPP <+> brackets (commas prettyArgs) <+> ppInstrMeta metadata
 
   where
     bounds True = "inbounds"
@@ -607,45 +646,47 @@ ppInstruction i
 
     ppInstrWithNuwNsw :: MonadModuleBuilder m => Doc ann -> Bool -> Bool -> Operand -> Operand -> InstructionMetadata -> m (Doc ann)
     ppInstrWithNuwNsw name nuw nsw op0 op1 metadata = do
-      prettyOp0 <- ppTyped op0
+      prettyOp0 <- ppTypedM ppOperand op0
+      prettyOp1 <- ppTypedM ppOperand op1
       return $ name
                <+> ppBool "nuw" nuw
                <+> ppBool "nsw" nsw
                <+> prettyOp0
-               `cma` pretty op1
+               `cma` prettyOp1
                <+> ppInstrMeta metadata
 
     ppInstrWithExact :: MonadModuleBuilder m => Doc ann -> Bool -> Operand -> Operand -> InstructionMetadata -> m (Doc ann)
     ppInstrWithExact name exact op0 op1 metadata = do
-      prettyOp0 <- ppTyped op0
+      prettyOp0 <- ppTypedM ppOperand op0
+      prettyOp1 <- ppTypedM ppOperand op1
       return $ name
                <+> ppBool "exact" exact
                <+> prettyOp0
-               `cma` pretty op1
+               `cma` prettyOp1
                <+> ppInstrMeta metadata
 
-instance Pretty CallableOperand where
-  pretty (Left asm) = error "CallableOperand"
-  pretty (Right op) = pretty op
+ppCallableOperand :: MonadModuleBuilder m => CallableOperand -> m (Doc ann)
+ppCallableOperand (Left asm) = error "Inline assembly is not a valid CallableOperand (Malformed AST)"
+ppCallableOperand (Right op) = ppOperand op
 
-prettyLandingPadClause :: MonadModuleBuilder m => LandingPadClause -> m (Doc ann)
-prettyLandingPadClause l
-  | Catch c  <- l = do { prettyC <- ppTyped c; return $ "catch" <+> prettyC }
-  | Filter c <- l = do { prettyC <- ppTyped c; return $ "filter" <+> prettyC }
+ppLandingPadClause :: MonadModuleBuilder m => LandingPadClause -> m (Doc ann)
+ppLandingPadClause l
+  | Catch c  <- l = do { prettyC <- ppTypedM ppConstant c; return $ "catch" <+> prettyC }
+  | Filter c <- l = do { prettyC <- ppTypedM ppConstant c; return $ "filter" <+> prettyC }
 
 instance Pretty (Either GroupID FunctionAttribute) where
   pretty (Left gid) = pretty gid
   pretty (Right fattr) = pretty fattr
 
-instance Pretty Operand where
-  pretty (LocalReference _ nm) = local' (pretty nm)
-  pretty (ConstantOperand con) = pretty con
-  pretty (MetadataOperand mdata) = pretty mdata
+ppOperand :: MonadModuleBuilder m => Operand -> m (Doc ann)
+ppOperand (LocalReference _ nm) = return $ local' (pretty nm)
+ppOperand (ConstantOperand con) = ppConstant con
+ppOperand (MetadataOperand mdata) = ppMetadata mdata
 
 ppMetadata :: MonadModuleBuilder m => Metadata -> m (Doc ann)
 ppMetadata (MDString str) = return $ "!" <> dquotes (pretty (decodeShortUtf8 str))
-ppMetadata (MDNode node) = return $ pretty node
-ppMetadata (MDValue operand) = ppTyped operand
+ppMetadata (MDNode node) = ppMDRefM node ppMDNode
+ppMetadata (MDValue operand) = ppTypedM ppOperand operand
 
 ppDINode :: [Char] -> [([Char], Maybe (Doc ann))] -> Doc ann
 ppDINode name attrs = "!" <> pretty name <> parens (commas (mapMaybe (\(k, mayV) -> fmap (\v -> pretty k <> ":" <+> v) mayV) attrs))
@@ -658,13 +699,19 @@ instance Pretty a => Pretty (MDRef a) where
   pretty (MDInline a) = pretty a
   pretty (MDRef ref) = pretty ref
 
-instance Pretty MDNode where
-  pretty (MDTuple xs) = "!" <> braces (commas (map ppMaybeMetadata xs))
-  pretty (DIExpression e) = pretty e
-  pretty (DIGlobalVariableExpression e) = pretty e
-  pretty (DILocation l) = pretty l
-  pretty (DIMacroNode m) = pretty m
-  pretty (DINode n) = pretty n
+ppMDRefM :: MonadModuleBuilder m => MDRef a -> (a -> m (Doc ann)) -> m (Doc ann)
+ppMDRefM (MDInline a) f = f a
+ppMDRefM (MDRef ref) _ = return $ pretty ref
+
+ppMDNode :: MonadModuleBuilder m => MDNode -> m (Doc ann)
+ppMDNode (MDTuple xs) = do
+  prettyMeta <- mapM ppMaybeMetadata xs
+  return $ "!" <> braces (commas prettyMeta)
+ppMDNode (DIExpression e) = return $ pretty e
+ppMDNode (DIGlobalVariableExpression e) = return $ pretty e
+ppMDNode (DILocation l) = return $ pretty l
+ppMDNode (DIMacroNode m) = return $ pretty m
+ppMDNode (DINode n) = ppDINodeM n
 
 instance Pretty DIExpression where
   pretty (Expression os) = "!DIExpression" <> parens (commas (concatMap ppDWOp os))
@@ -716,14 +763,14 @@ instance Pretty DIMacroInfo where
   pretty Define = "DW_MACINFO_define"
   pretty Undef = "DW_MACINFO_undef"
 
-instance Pretty DINode where
-  pretty (DIEnumerator e) = pretty e
-  pretty (DIImportedEntity e) = pretty e
-  pretty (DIObjCProperty p) = pretty p
-  pretty (DIScope s) = pretty s
-  pretty (DISubrange r) = pretty r
-  pretty (DITemplateParameter p) = pretty p
-  pretty (DIVariable v) = pretty v
+ppDINodeM :: MonadModuleBuilder m => DINode -> m (Doc ann)
+ppDINodeM (DIEnumerator e) = return $ pretty e
+ppDINodeM (DIImportedEntity e) = ppDIImportedEntity e
+ppDINodeM (DIObjCProperty p) = return $ pretty p
+ppDINodeM (DIScope s) = return $ pretty s
+ppDINodeM (DISubrange r) = return $ pretty r
+ppDINodeM (DITemplateParameter p) = ppDITemplateParameter p
+ppDINodeM (DIVariable v) = return $ pretty v
 
 instance Pretty DILocalScope where
   pretty (DILexicalBlockBase b) = pretty b
@@ -736,12 +783,14 @@ instance Pretty DIEnumerator where
       , ("isUnsigned", if unsigned then Just "true" else Nothing)
       , ("value", Just (pretty val))]
 
-instance Pretty DIImportedEntity where
-  pretty ImportedEntity {..} = ppDINode "DIImportedEntity"
+ppDIImportedEntity :: MonadModuleBuilder m => DIImportedEntity -> m (Doc ann)
+ppDIImportedEntity (ImportedEntity {..}) = do
+  prettyEntity <- case entity of {Just x -> do { x' <- ppMDRefM x ppDINodeM; return $ Just x' }; Nothing -> pure Nothing }
+  return $ ppDINode "DIImportedEntity"
     [ ("tag", Just (pretty tag))
     , ("scope", Just (pretty scope))
     , ("name", ppSbs name)
-    , ("entity", fmap pretty entity)
+    , ("entity", prettyEntity)
     , ("file", fmap pretty file)
     , ("line", Just (pretty line))
     ]
@@ -776,15 +825,16 @@ instance Pretty DICount where
   pretty (DICountConstant c) = pretty c
   pretty (DICountVariable v) = pretty v
 
-instance Pretty DITemplateParameter where
-  pretty DITemplateTypeParameter {..} = ppDINode "DITemplateTypeParameter"
-    [ ("name", ppSbs name), ("type", Just (pretty type')) ]
-  pretty DITemplateValueParameter {..} = ppDINode "DITemplateValueParameter"
-   [ ("tag", ppTemplateValueParameterTag tag)
-   , ("name", ppSbs name)
-   , ("type", Just (pretty type'))
-   , ("value", Just (pretty value))
-   ]
+ppDITemplateParameter :: MonadModuleBuilder m => DITemplateParameter -> m (Doc ann)
+ppDITemplateParameter (DITemplateTypeParameter {..}) = return $ ppDINode "DITemplateTypeParameter" [ ("name", ppSbs name), ("type", Just (pretty type')) ]
+ppDITemplateParameter (DITemplateValueParameter {..}) = do
+  prettyValue <- ppMaybeMetadata value
+  return $ ppDINode "DITemplateValueParameter"
+    [ ("tag", ppTemplateValueParameterTag tag)
+    , ("name", ppSbs name)
+    , ("type", Just (pretty type'))
+    , ("value", Just prettyValue)
+    ]
 
 ppTemplateValueParameterTag :: TemplateValueParameterTag -> Maybe (Doc ann)
 ppTemplateValueParameterTag TemplateValueParameter = Nothing
@@ -1075,95 +1125,110 @@ instance Pretty DILocalVariable where
     , ("align", Just (pretty alignInBits))
     ]
 
-instance Pretty C.Constant where
-  pretty (C.Int width val) = pretty val
-  pretty (C.Float (F.Double val))      =
-    if specialFP val
+ppConstant :: MonadModuleBuilder m => C.Constant -> m (Doc ann)
+ppConstant c
+  | C.Int width val <- c = return $ pretty val
+  | C.Float (F.Double val) <- c = return $
+      if specialFP val
       then "0x" <> (pretty . pack) (showHex (doubleToWord val) "")
       else pretty $ pack $ printf "%6.6e" val
-  pretty (C.Float (F.Single val))      =
-    if specialFP val
+  | C.Float (F.Single val) <- c = return $
+      if specialFP val
       then "0x" <> (pretty . pack) (showHex (floatToWord val) "")
       else pretty $ pack $ printf "%6.6e" val
-  pretty (C.Float (F.Half val))        = pretty $ pack $ printf "%6.6e" val
-  pretty (C.Float (F.Quadruple val _)) = pretty $ pack $ printf "%6.6e" val
-  pretty (C.Float (F.X86_FP80 val _))  = pretty $ pack $ printf "%6.6e" val
-  pretty (C.Float (F.PPC_FP128 val _)) = pretty $ pack $ printf "%6.6e" val
+  | C.Float (F.Half val) <- c = return $ pretty $ pack $ printf "%6.6e" val
+  | C.Float (F.Quadruple val _) <- c = return $ pretty $ pack $ printf "%6.6e" val
+  | C.Float (F.X86_FP80 val _) <- c = return $ pretty $ pack $ printf "%6.6e" val
+  | C.Float (F.PPC_FP128 val _) <- c = return $ pretty $ pack $ printf "%6.6e" val
 
-  pretty (C.GlobalReference ty nm) = "@" <> pretty nm
-  pretty (C.Vector args) = "<" <+> commas (fmap ppTyped args) <+> ">"
+  | C.GlobalReference ty nm <- c = return $ "@" <> pretty nm
+  | C.Vector args <- c = do
+      prettyArgs <- mapM ppTyped args
+      return $ "<" <+> commas prettyArgs <+> ">"
 
-  pretty (C.Add {..})    = "add"  <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.Sub {..})    = "sub"  <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.Mul {..})    = "mul"  <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.Shl {..})    = "shl"  <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.AShr {..})   = "ashr" <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.LShr {..})   = "lshr" <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.And {..})    = "and"  <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.Or {..})     = "or"   <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.Xor {..})    = "xor"  <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.SDiv {..})   = "sdiv"  <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.UDiv {..})   = "udiv"  <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.SRem {..})   = "srem"  <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.URem {..})   = "urem"  <+> ppTyped operand0 `cma` pretty operand1
+  | C.Add {..}  <- c = do { prettyOp0 <- ppTyped operand0; return $ "add"  <+> prettyOp0 `cma` pretty operand1 }
+  | C.Sub {..}  <- c = do { prettyOp0 <- ppTyped operand0; return $ "sub"  <+> prettyOp0 `cma` pretty operand1 }
+  | C.Mul {..}  <- c = do { prettyOp0 <- ppTyped operand0; return $ "mul"  <+> prettyOp0 `cma` pretty operand1 }
+  | C.Shl {..}  <- c = do { prettyOp0 <- ppTyped operand0; return $ "shl"  <+> prettyOp0 `cma` pretty operand1 }
+  | C.AShr {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "ashr" <+> prettyOp0 `cma` pretty operand1 }
+  | C.LShr {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "lshr" <+> prettyOp0 `cma` pretty operand1 }
+  | C.And {..}  <- c = do { prettyOp0 <- ppTyped operand0; return $ "and"  <+> prettyOp0 `cma` pretty operand1 }
+  | C.Or {..}   <- c = do { prettyOp0 <- ppTyped operand0; return $ "or"   <+> prettyOp0 `cma` pretty operand1 }
+  | C.Xor {..}  <- c = do { prettyOp0 <- ppTyped operand0; return $ "xor"  <+> prettyOp0 `cma` pretty operand1 }
+  | C.SDiv {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "sdiv" <+> prettyOp0 `cma` pretty operand1 }
+  | C.UDiv {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "udiv" <+> prettyOp0 `cma` pretty operand1 }
+  | C.SRem {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "srem" <+> prettyOp0 `cma` pretty operand1 }
+  | C.URem {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "urem" <+> prettyOp0 `cma` pretty operand1 }
 
-  pretty (C.FAdd {..})   = "fadd" <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.FSub {..})   = "fsub" <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.FMul {..})   = "fmul" <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.FDiv {..})   = "fdiv" <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.FRem {..})   = "frem" <+> ppTyped operand0 `cma` pretty operand1
-  pretty (C.FCmp {..})   = "fcmp" <+> pretty fpPredicate <+> ppTyped operand0 `cma` pretty operand1
-  pretty C.ICmp {..}     = "icmp" <+> pretty iPredicate <+> ppTyped operand0 `cma` pretty operand1
+  | C.FAdd {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "fadd" <+> prettyOp0 `cma` pretty operand1 }
+  | C.FSub {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "fsub" <+> prettyOp0 `cma` pretty operand1 }
+  | C.FMul {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "fmul" <+> prettyOp0 `cma` pretty operand1 }
+  | C.FDiv {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "fdiv" <+> prettyOp0 `cma` pretty operand1 }
+  | C.FRem {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "frem" <+> prettyOp0 `cma` pretty operand1 }
+  | C.FCmp {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "fcmp" <+> pretty fpPredicate <+> prettyOp0 `cma` pretty operand1 }
+  | C.ICmp {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "icmp" <+> pretty iPredicate <+> prettyOp0 `cma` pretty operand1 }
 
-  pretty (C.Select {..})  = "select" <+> commas [ppTyped condition', ppTyped trueValue, ppTyped falseValue]
-  pretty (C.SExt {..})    = "sext" <+> ppTyped operand0 <+> "to" <+> pretty type'
-  pretty (C.ZExt {..})    = "zext" <+> ppTyped operand0 <+> "to" <+> pretty type'
-  pretty (C.FPExt {..})   = "fpext" <+> ppTyped operand0 <+> "to" <+> pretty type'
-  pretty (C.Trunc {..})   = "trunc" <+> ppTyped operand0 <+> "to" <+> pretty type'
-  pretty (C.FPTrunc {..}) = "fptrunc" <+> ppTyped operand0 <+> "to" <+> pretty type'
+  | C.Select {..} <- c = do
+    prettyCond <- ppTyped condition'
+    prettyTrue <- ppTyped trueValue
+    prettyFalse <- ppTyped falseValue
+    return $ "select" <+> commas [prettyCond, prettyTrue, prettyFalse]
 
-  pretty C.FPToUI {..} = "fptoui" <+> ppTyped operand0 <+> "to" <+> pretty type'
-  pretty C.FPToSI {..} = "fptosi" <+> ppTyped operand0 <+> "to" <+> pretty type'
-  pretty C.UIToFP {..} = "uitofp" <+> ppTyped operand0 <+> "to" <+> pretty type'
-  pretty C.SIToFP {..} = "sitofp" <+> ppTyped operand0 <+> "to" <+> pretty type'
+  | C.SExt {..}    <- c = do { prettyOp0 <- ppTyped operand0; return $ "sext" <+> prettyOp0 <+> "to" <+> pretty type' }
+  | C.ZExt {..}    <- c = do { prettyOp0 <- ppTyped operand0; return $ "zext" <+> prettyOp0 <+> "to" <+> pretty type' }
+  | C.FPExt {..}   <- c = do { prettyOp0 <- ppTyped operand0; return $ "fpext" <+> prettyOp0 <+> "to" <+> pretty type' }
+  | C.Trunc {..}   <- c = do { prettyOp0 <- ppTyped operand0; return $ "trunc" <+> prettyOp0 <+> "to" <+> pretty type' }
+  | C.FPTrunc {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "fptrunc" <+> prettyOp0 <+> "to" <+> pretty type' }
 
-  pretty (C.Struct _ packed elems) =
-    let struct = spacedbraces $ commas $ fmap ppTyped elems
-    in if packed
-         then angleBrackets struct
-         else struct
+  | C.FPToUI {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "fptoui" <+> prettyOp0 <+> "to" <+> pretty type' }
+  | C.FPToSI {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "fptosi" <+> prettyOp0 <+> "to" <+> pretty type' }
+  | C.UIToFP {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "uitofp" <+> prettyOp0 <+> "to" <+> pretty type' }
+  | C.SIToFP {..} <- c = do { prettyOp0 <- ppTyped operand0; return $ "sitofp" <+> prettyOp0 <+> "to" <+> pretty type' }
 
-  pretty (C.Null constantType) = ppNullInitializer constantType
+  | C.Struct _ packed elems <- c = do
+      prettyElems <- mapM ppTyped elems
+      let struct = spacedbraces $ commas prettyElems
+      if packed
+      then return $ angleBrackets struct
+      else return struct
+
+  | C.Null constantType <- c = return $ ppNullInitializer constantType
 
 #if MIN_VERSION_llvm_hs_pure(5,1,3)
-  pretty (C.AggregateZero constantType) = "zeroinitializer"
+  | C.AggregateZero constantType <- c = return "zeroinitializer"
 #endif
 
-  pretty (C.Undef {}) = "undef"
-  pretty (C.TokenNone {}) = "none"
-  pretty (C.BlockAddress fn blk) = "blockaddress" <> parens (commas [ global (pretty fn), local' (pretty blk) ])
+  | C.Undef {} <- c = return "undef"
+  | C.TokenNone {} <- c = return "none"
+  | C.BlockAddress fn blk <- c = return $ "blockaddress" <> parens (commas [ global (pretty fn), local' (pretty blk) ])
 
-  pretty C.Array {..}
-    | memberType == (IntegerType 8) = "c" <> (dquotes $ hcat [ppIntAsChar val | C.Int _ val <- memberValues])
-    | otherwise = brackets $ commas $ fmap ppTyped memberValues
+  | C.Array {..} <- c,  memberType == (IntegerType 8) = return $ "c" <> (dquotes $ hcat [ppIntAsChar val | C.Int _ val <- memberValues])
+  | C.Array {..} <- c = do
+      prettyMembs <- mapM ppTyped memberValues
+      return $ brackets $ commas prettyMembs
 
-  pretty C.GetElementPtr {..} = "getelementptr" <+> bounds inBounds <+> parens (commas (pretty argTy : fmap ppTyped (address:indices)))
-    where
-      argTy = case typeOf address of
-        PointerType argTy_ _ -> argTy_
-        _ -> error "invalid load of non-pointer type. (Malformed AST)"
-      bounds True = "inbounds"
-      bounds False = mempty
+  | C.GetElementPtr {..} <- c = do
+      ta <- typeOf address
+      let argTy = getElementType ta
+      prettyAIs <- mapM ppTyped (address:indices)
+      let prettyBounds = case inBounds of { True -> "inbounds"; False -> mempty }
+      return $ "getelementptr" <+> prettyBounds <+> parens (commas (pretty argTy : prettyAIs))
 
-  pretty C.BitCast {..} = "bitcast" <+> parens (ppTyped operand0 <+> "to" <+> pretty type')
-  pretty C.PtrToInt {..} = "ptrtoint" <+> parens (ppTyped operand0 <+> "to" <+> pretty type')
-  pretty C.IntToPtr {..} = "inttoptr" <+> parens (ppTyped operand0 <+> "to" <+> pretty type')
-  pretty C.AddrSpaceCast {..} = "addrspacecast" <+> parens (ppTyped operand0 <+> "to" <+> pretty type')
-  pretty _ = error "Non-function argument. (Malformed AST)"
+  | C.BitCast {..}        <- c = do { prettyOp0 <- ppTyped operand0; return $ "bitcast" <+> parens (prettyOp0 <+> "to" <+> pretty type') }
+  | C.PtrToInt {..}       <- c = do { prettyOp0 <- ppTyped operand0; return $ "ptrtoint" <+> parens (prettyOp0 <+> "to" <+> pretty type') }
+  | C.IntToPtr {..}       <- c = do { prettyOp0 <- ppTyped operand0; return $ "inttoptr" <+> parens (prettyOp0 <+> "to" <+> pretty type') }
+  | C.AddrSpaceCast {..}  <- c = do { prettyOp0 <- ppTyped operand0; return $ "addrspacecast" <+> parens (prettyOp0 <+> "to" <+> pretty type') }
+  | otherwise = error "Non-function argument. (Malformed AST)"
 
 instance Pretty a => Pretty (Named a) where
   pretty (nm := a) = "%" <> pretty nm <+> "=" <+> pretty a
   pretty (Do a) = pretty a
+
+ppNamed :: MonadModuleBuilder m => (a -> m (Doc ann)) -> Named a -> m (Doc ann)
+ppNamed pp (nm := a) = do
+  prettyA <- pp a
+  return $ "%" <> pretty nm <+> "=" <+> prettyA
+ppNamed pp (Do a) = pp a
 
 instance Pretty Module where
   pretty Module {..} =
@@ -1299,11 +1364,6 @@ ppAlign x | x == 0    = mempty
 phiIncoming :: (Operand, Name) -> Doc ann
 phiIncoming (op, nm) = brackets (pretty op `cma` (local' (pretty nm)))
 
-ppParams :: (a -> Doc ann) -> ([a], Bool) -> Doc ann
-ppParams ppParam (ps, varrg) = parens . commas $ fmap ppParam ps ++ vargs
-    where
-        vargs = if varrg then ["..."] else []
-
 ppFunctionArgumentTypes :: Type -> Doc ann
 ppFunctionArgumentTypes FunctionType {..} = ppParams pretty (argumentTypes, isVarArg)
 ppFunctionArgumentTypes _ = error "Non-function argument. (Malformed AST)"
@@ -1315,62 +1375,64 @@ ppNullInitializer FunctionType {..} = "zeroinitializer"
 ppNullInitializer ArrayType {..} = "zeroinitializer"
 ppNullInitializer _ = error "Non-pointer argument. (Malformed AST)"
 
-ppCall :: Instruction -> Doc ann
-ppCall Call { function = Right f,..}
-  = tail <+> "call" <+> pretty callingConvention <+> ppReturnAttributes returnAttributes <+> pretty resultType <+> ftype
-    <+> pretty f <> parens (commas $ fmap ppArguments arguments) <+> ppFunctionAttributes functionAttributes
-    where
-      (functionType@FunctionType {..}) = case (referencedType (typeOf f)) of
+ppCall :: MonadModuleBuilder m => Instruction -> m (Doc ann)
+ppCall (Call { function = Right f,..}) = do
+  typeOfF <- typeOf f
+  let (functionType@FunctionType {..}) = case (referencedType typeOfF) of
                                            fty@FunctionType {..} -> fty
                                            _ -> error "Calling non function type. (Malformed AST)"
-      ftype = if isVarArg
+  let ftype = if isVarArg
               then ppFunctionArgumentTypes functionType
               else mempty
-      referencedType (PointerType t _) = referencedType t
-      referencedType t                 = t
 
-      tail = case tailCallKind of
-        Just Tail -> "tail"
-        Just MustTail -> "musttail"
-        Just NoTail -> "notail"
-        Nothing -> mempty
-ppCall Call { function = Left (IA.InlineAssembly {..}), ..}
-  = tail <+> "call" <+> pretty callingConvention <+> ppReturnAttributes returnAttributes <+> pretty type'
-    <+> "asm" <+> sideeffect' <+> align' <+> dialect' <+> dquotes (pretty (pack (BL.unpack assembly))) <> ","
-    <+> dquotes (pretty constraints) <> parens (commas $ fmap ppArguments arguments) <+> ppFunctionAttributes functionAttributes
-    where
-      tail = case tailCallKind of
-        Just Tail -> "tail"
-        Just MustTail -> "musttail"
-        Just NoTail -> "notail"
-        Nothing -> mempty
-      -- If multiple keywords appear the ‘sideeffect‘ keyword must come first,
-      -- the ‘alignstack‘ keyword second and the ‘inteldialect‘ keyword last.
-      sideeffect' = if hasSideEffects then "sideeffect" else ""
-      align' = if alignStack then "alignstack" else ""
-      -- ATTDialect is assumed if not specified
-      dialect' = case dialect of IA.ATTDialect -> ""; IA.IntelDialect -> "inteldialect"
+  let tail = case tailCallKind of
+               Just Tail -> "tail"
+               Just MustTail -> "musttail"
+               Just NoTail -> "notail"
+               Nothing -> mempty
+  return $ tail <+> "call" <+> pretty callingConvention <+> ppReturnAttributes returnAttributes <+> pretty resultType <+> ftype
+                <+> pretty f <> parens (commas $ fmap ppArguments arguments) <+> ppFunctionAttributes functionAttributes
+
+ppCall (Call { function = Left (IA.InlineAssembly {..}), ..}) = do
+  let tail = case tailCallKind of
+               Just Tail -> "tail"
+               Just MustTail -> "musttail"
+               Just NoTail -> "notail"
+               Nothing -> mempty
+  -- If multiple keywords appear the ‘sideeffect‘ keyword must come first,
+  -- the ‘alignstack‘ keyword second and the ‘inteldialect‘ keyword last.
+  let sideeffect' = if hasSideEffects then "sideeffect" else ""
+  let align' = if alignStack then "alignstack" else ""
+  -- ATTDialect is assumed if not specified
+  let dialect' = case dialect of IA.ATTDialect -> ""; IA.IntelDialect -> "inteldialect"
+  return $ tail <+> "call" <+> pretty callingConvention <+> ppReturnAttributes returnAttributes <+> pretty type'
+                <+> "asm" <+> sideeffect' <+> align' <+> dialect' <+> dquotes (pretty (pack (BL.unpack assembly))) <> ","
+                <+> dquotes (pretty constraints) <> parens (commas $ fmap ppArguments arguments) <+> ppFunctionAttributes functionAttributes
+
 ppCall x = error "Non-callable argument. (Malformed AST)"
+
+referencedType :: Type -> Type
+referencedType (PointerType t _) = referencedType t
+referencedType t                 = t
 
 ppReturnAttributes :: [ParameterAttribute] -> Doc ann
 ppReturnAttributes pas = hsep $ fmap pretty pas
 
 -- Differs from Call in record name conventions only so needs a seperate almost
 -- identical function. :(
-ppInvoke :: Terminator -> Doc ann
-ppInvoke Invoke { function' = Right f,..}
-  = "invoke" <+> pretty callingConvention' <+> pretty resultType <+> ftype
-    <+> pretty f <> parens (commas $ fmap ppArguments arguments') <+> ppFunctionAttributes functionAttributes'
-    where
-      (functionType@FunctionType {..}) =
-        case referencedType (typeOf f) of
-          fty@FunctionType{..} -> fty
-          _ -> error "Invoking non-function type. (Malformed AST)"
-      ftype = if isVarArg
+ppInvoke :: MonadModuleBuilder m => Terminator -> m (Doc ann)
+ppInvoke (Invoke { function' = Right f,..}) = do
+  typeOfF <- typeOf f
+  let (functionType@FunctionType {..}) = case referencedType typeOfF of
+                                           fty@FunctionType{..} -> fty
+                                           _ -> error "Invoking non-function type. (Malformed AST)"
+  let ftype = if isVarArg
               then ppFunctionArgumentTypes functionType
               else mempty
-      referencedType (PointerType t _) = referencedType t
-      referencedType t                 = t
+
+  return $ "invoke" <+> pretty callingConvention' <+> pretty resultType <+> ftype
+                    <+> pretty f <> parens (commas $ fmap ppArguments arguments') <+> ppFunctionAttributes functionAttributes'
+
 ppInvoke x = error "Non-callable argument. (Malformed AST)"
 
 ppSingleBlock :: BasicBlock -> Doc ann
@@ -1395,6 +1457,9 @@ specialFP f = isNaN f || f == 1 / 0 || f == - 1 / 0
 ppInstrMeta :: InstructionMetadata -> Doc ann
 ppInstrMeta [] = mempty
 ppInstrMeta xs = "," <> ppInstructionMetadata xs
+
+ppInstructionMetadata :: InstructionMetadata -> Doc ann
+ppInstructionMetadata meta = commas ["!" <> short x <+> pretty y | (x,y) <- meta]
 
 ppLayoutOptions :: LayoutOptions
 ppLayoutOptions = LayoutOptions (AvailablePerLine 100 0.5)
