@@ -2,7 +2,9 @@ module Main where
 
 import LLVM.Context
 import LLVM.Pretty (ppllvm)
+import LLVM.AST
 import qualified LLVM.Module as M
+import LLVM.IRBuilder.Module
 
 import Control.Monad (filterM)
 import Control.Monad.Except
@@ -30,7 +32,9 @@ llvmFile fname = do
   withContext $ \ctx -> do
     res <- M.withModuleFromLLVMAssembly ctx str $ \mod -> do
       ast <- M.moduleAST mod
-      let str = ppllvm ast
+      let str = fst $ runModuleBuilder emptyModuleBuilder $ do
+                  mapM emitDefn $ moduleDefinitions ast
+                  ppllvm ast
       T.writeFile ("tests/output" </> takeFileName fname) str
       trip <- M.withModuleFromLLVMAssembly ctx (T.unpack str) (const $ return ())
       {-T.putStrLn str-}
