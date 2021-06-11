@@ -117,6 +117,15 @@ ppMaybe :: Pretty a => Maybe a -> Doc ann
 ppMaybe (Just x) = pretty x
 ppMaybe Nothing = mempty
 
+ppEither :: (Pretty a, Pretty b) => MDRef (Either a b) -> Doc ann
+ppEither (MDRef r) = pretty r
+ppEither (MDInline e) = either pretty pretty e
+
+ppEitherM :: MonadModuleBuilder m => (a -> m (Doc ann)) -> (b -> m (Doc ann)) -> MDRef (Either a b) -> m (Doc ann)
+ppEitherM ppA ppB (MDRef r) = return $ pretty r
+ppEitherM ppA ppB (MDInline (Left x)) = ppA x
+ppEitherM ppA ppB (MDInline (Right x)) = ppB x
+
 ppBool :: Doc ann -> Bool -> Doc ann
 ppBool x True = x
 ppBool x False = mempty
@@ -709,7 +718,7 @@ ppMDNode (MDTuple xs) = do
   return $ "!" <> braces (commas prettyMeta)
 ppMDNode (DIExpression e) = return $ pretty e
 ppMDNode (DIGlobalVariableExpression e) = return $ pretty e
-ppMDNode (DILocation l) = return $ pretty l
+ppMDNode (DILocation l) = ppDILocation l
 ppMDNode (DIMacroNode m) = return $ pretty m
 ppMDNode (DINode n) = ppDINodeM n
 
@@ -746,9 +755,10 @@ instance Pretty DIGlobalVariableExpression where
     , ("expr", Just (pretty (expr e)))
     ]
 
-instance Pretty DILocation where
-  pretty (Location line col scope) =
-    ppDINode "DILocation" [("line", Just (pretty line)), ("column", Just (pretty col)), ("scope", Just (pretty scope))]
+ppDILocation :: MonadModuleBuilder m => DILocation -> m (Doc ann)
+ppDILocation (Location line col scope) = do
+  prettyScope <- ppMDRefM scope ppDILocalScope
+  return $ ppDINode "DILocation" [("line", Just (pretty line)), ("column", Just (pretty col)), ("scope", Just prettyScope)]
 
 instance Pretty DIMacroNode where
   pretty DIMacro {..} = ppDINode "DIMacro"
@@ -766,15 +776,15 @@ instance Pretty DIMacroInfo where
 ppDINodeM :: MonadModuleBuilder m => DINode -> m (Doc ann)
 ppDINodeM (DIEnumerator e) = return $ pretty e
 ppDINodeM (DIImportedEntity e) = ppDIImportedEntity e
-ppDINodeM (DIObjCProperty p) = return $ pretty p
-ppDINodeM (DIScope s) = return $ pretty s
+ppDINodeM (DIObjCProperty p) = ppDIObjCProperty p
+ppDINodeM (DIScope s) = ppDIScope s
 ppDINodeM (DISubrange r) = return $ pretty r
 ppDINodeM (DITemplateParameter p) = ppDITemplateParameter p
 ppDINodeM (DIVariable v) = return $ pretty v
 
-instance Pretty DILocalScope where
-  pretty (DILexicalBlockBase b) = pretty b
-  pretty (DISubprogram p) = pretty p
+ppDILocalScope :: MonadModuleBuilder m => DILocalScope -> m (Doc ann)
+ppDILocalScope (DILexicalBlockBase b) = ppDILexicalBlockBase b
+ppDILocalScope (DISubprogram p) = ppDISubprogram p
 
 instance Pretty DIEnumerator where
   pretty (Enumerator val unsigned name) =
@@ -786,9 +796,10 @@ instance Pretty DIEnumerator where
 ppDIImportedEntity :: MonadModuleBuilder m => DIImportedEntity -> m (Doc ann)
 ppDIImportedEntity (ImportedEntity {..}) = do
   prettyEntity <- case entity of {Just x -> do { x' <- ppMDRefM x ppDINodeM; return $ Just x' }; Nothing -> pure Nothing }
+  prettyScope <- ppMDRefM scope ppDIScope
   return $ ppDINode "DIImportedEntity"
     [ ("tag", Just (pretty tag))
-    , ("scope", Just (pretty scope))
+    , ("scope", Just prettyScope)
     , ("name", ppSbs name)
     , ("entity", prettyEntity)
     , ("file", fmap pretty file)
@@ -799,24 +810,26 @@ instance Pretty ImportedEntityTag where
   pretty ImportedModule = "DW_TAG_imported_module"
   pretty ImportedDeclaration = "DW_TAG_imported_declaration"
 
-instance Pretty DIObjCProperty where
-  pretty ObjCProperty {..} = ppDINode "DIObjCProperty"
+ppDIObjCProperty :: MonadModuleBuilder m => DIObjCProperty -> m (Doc ann)
+ppDIObjCProperty ObjCProperty {..} = do
+  prettyType <- case type' of {Just x -> do { x' <- ppMDRefM x ppDIType; return $ Just x' }; Nothing -> pure Nothing }
+  return $ ppDINode "DIObjCProperty"
     [ ("name", ppSbs name)
     , ("file", fmap pretty file)
     , ("line", Just (pretty line))
     , ("setter", ppSbs getterName)
     , ("getter", ppSbs setterName)
     , ("attributes", Just (pretty attributes))
-    , ("type", fmap pretty type')
+    , ("type", prettyType)
     ]
 
-instance Pretty DIScope where
-  pretty (DICompileUnit cu) = pretty cu
-  pretty (DIFile f) = pretty f
-  pretty (DILocalScope s) = pretty s
-  pretty (DIModule m) = pretty m
-  pretty (DINamespace ns) = pretty ns
-  pretty (DIType t) = pretty t
+ppDIScope :: MonadModuleBuilder m => DIScope -> m (Doc ann)
+ppDIScope (DICompileUnit cu) = ppDICompileUnit cu
+ppDIScope (DIFile f) = return $ pretty f
+ppDIScope (DILocalScope s) = ppDILocalScope s
+ppDIScope (DIModule m) = ppDIModule m
+ppDIScope (DINamespace ns) = ppDINamespace ns
+ppDIScope (DIType t) = ppDIType t
 
 instance Pretty DISubrange where
   pretty Subrange {..} = ppDINode "DISubrange" [("count", Just (pretty count)), ("lowerBound", Just (pretty lowerBound))]
@@ -826,13 +839,16 @@ instance Pretty DICount where
   pretty (DICountVariable v) = pretty v
 
 ppDITemplateParameter :: MonadModuleBuilder m => DITemplateParameter -> m (Doc ann)
-ppDITemplateParameter (DITemplateTypeParameter {..}) = return $ ppDINode "DITemplateTypeParameter" [ ("name", ppSbs name), ("type", Just (pretty type')) ]
+ppDITemplateParameter (DITemplateTypeParameter {..}) = do
+  prettyType <- ppMDRefM (case type' of { (Just t) -> t; Nothing -> error "type field in DITemplateTypeParameter is required (malformed AST)" }) ppDIType
+  return $ ppDINode "DITemplateTypeParameter" [ ("name", ppSbs name), ("type", Just prettyType) ]
 ppDITemplateParameter (DITemplateValueParameter {..}) = do
+  prettyType <- case type' of {Just x -> do { x' <- ppMDRefM x ppDIType; return $ Just x' }; Nothing -> pure Nothing }
   prettyValue <- ppMaybeMetadata value
   return $ ppDINode "DITemplateValueParameter"
     [ ("tag", ppTemplateValueParameterTag tag)
     , ("name", ppSbs name)
-    , ("type", Just (pretty type'))
+    , ("type", prettyType)
     , ("value", Just prettyValue)
     ]
 
@@ -845,27 +861,31 @@ instance Pretty DIVariable where
   pretty (DIGlobalVariable v) = pretty v
   pretty (DILocalVariable v) = pretty v
 
-instance Pretty DICompileUnit where
-  pretty cu@CompileUnit {..} = "distinct" <+> ppDINode "DICompileUnit"
-    [ ("language", Just (pretty language))
-    , ("file", Just (pretty file))
-    , ("producer", ppSbs producer)
-    , ("isOptimized", Just (ppBoolean optimized))
-    , ("flags", ppSbs flags)
-    , ("runtimeVersion", Just (pretty runtimeVersion))
-    , ("splitDebugFileName", ppSbs splitDebugFileName)
-    , ("emissionKind", Just (pretty emissionKind))
-    , ("enums", ppDIArray (map pretty enums))
-    , ("retainedTypes", ppDIArray (map ppEither retainedTypes))
-    , ("globals", ppDIArray (map pretty globals))
-    , ("imports", ppDIArray (map pretty imports))
-    , ("macros", ppDIArray (map pretty macros))
-    , ("dwoId", Just (pretty dWOId))
-    , ("splitDebugInlining", Just (ppBoolean splitDebugInlining))
-    , ("debugInfoForProfiling", Just (ppBoolean debugInfoForProfiling))
-    , ("nameTableKind", Just (pretty nameTableKind))
-    , ("debugBaseAddress", Just (ppBoolean debugBaseAddress))
-    ]
+ppDICompileUnit :: MonadModuleBuilder m => DICompileUnit -> m (Doc ann)
+ppDICompileUnit cu@CompileUnit {..} = do
+  prettyImports <- mapM (flip ppMDRefM ppDIImportedEntity) imports
+  prettyEnums <- mapM (flip ppMDRefM ppDICompositeType) enums
+  prettyRTs <- mapM (ppEitherM ppDIType ppDISubprogram) retainedTypes
+  return $ "distinct" <+> ppDINode "DICompileUnit"
+                      [ ("language", Just (pretty language))
+                      , ("file", Just (pretty file))
+                      , ("producer", ppSbs producer)
+                      , ("isOptimized", Just (ppBoolean optimized))
+                      , ("flags", ppSbs flags)
+                      , ("runtimeVersion", Just (pretty runtimeVersion))
+                      , ("splitDebugFileName", ppSbs splitDebugFileName)
+                      , ("emissionKind", Just (pretty emissionKind))
+                      , ("enums", ppDIArray prettyEnums)
+                      , ("retainedTypes", ppDIArray prettyRTs)
+                      , ("globals", ppDIArray (map pretty globals))
+                      , ("imports", ppDIArray prettyImports)
+                      , ("macros", ppDIArray (map pretty macros))
+                      , ("dwoId", Just (pretty dWOId))
+                      , ("splitDebugInlining", Just (ppBoolean splitDebugInlining))
+                      , ("debugInfoForProfiling", Just (ppBoolean debugInfoForProfiling))
+                      , ("nameTableKind", Just (pretty nameTableKind))
+                      , ("debugBaseAddress", Just (ppBoolean debugBaseAddress))
+                      ]
 
 instance Pretty DebugEmissionKind where
   pretty NoDebug = "NoDebug"
@@ -883,67 +903,83 @@ ppDIChecksum :: Maybe ChecksumInfo -> [([Char], Maybe (Doc ann))]
 ppDIChecksum Nothing = []
 ppDIChecksum (Just (ChecksumInfo kind val)) = [("checksumkind", Just (pretty kind)), ("checksum", ppSbs val)]
 
-instance Pretty DIModule where
-  pretty O.Module {..} = ppDINode "DIModule"
-    [ ("scope", Just (maybe "null" pretty scope))
+ppDIModule :: MonadModuleBuilder m => DIModule -> m (Doc ann)
+ppDIModule O.Module {..} = do
+  prettyScope <- case scope of { Just x -> ppMDRefM x ppDIScope; Nothing -> pure "null" }
+  return $ ppDINode "DIModule"
+    [ ("scope", Just prettyScope)
     , ("name", ppSbs name)
     , ("configMacros", ppSbs configurationMacros)
     , ("includePath", ppSbs includePath)
     , ("isysroot", ppSbs isysRoot)
     ]
 
-instance Pretty DINamespace where
-  pretty Namespace {..} = ppDINode "DINamespace"
+ppDINamespace :: MonadModuleBuilder m => DINamespace -> m (Doc ann)
+ppDINamespace Namespace {..} = do
+  prettyScope <- case scope of { Just x -> ppMDRefM x ppDIScope; Nothing -> pure "null" }
+  return $ ppDINode "DINamespace"
     [ ("name", ppSbs name)
-    , ("scope", Just (maybe "null" pretty scope))
+    , ("scope", Just prettyScope)
     , ("exportSymbols", Just (ppBoolean exportSymbols))
     ]
 
-instance Pretty DIType where
-  pretty (DIBasicType t) = pretty t
-  pretty (DICompositeType t) = pretty t
-  pretty (DIDerivedType t) = pretty t
-  pretty (DISubroutineType t) = pretty t
+ppDIType :: MonadModuleBuilder m => DIType -> m (Doc ann)
+ppDIType (DIBasicType t) = return $ pretty t
+ppDIType (DICompositeType t) = ppDICompositeType t
+ppDIType (DIDerivedType t) = ppDIDerivedType t
+ppDIType (DISubroutineType t) = return $ pretty t
 
-instance Pretty DILexicalBlockBase where
-  pretty DILexicalBlock {..} = ppDINode "DILexicalBlock"
-    [ ("scope", Just (pretty scope))
+ppDILexicalBlockBase :: MonadModuleBuilder m => DILexicalBlockBase -> m (Doc ann)
+ppDILexicalBlockBase DILexicalBlock {..} = do
+  prettyScope <- ppMDRefM scope ppDILocalScope
+  return $ ppDINode "DILexicalBlock"
+    [ ("scope", Just prettyScope)
     , ("file", fmap pretty file)
     , ("line", Just (pretty line))
     , ("column", Just (pretty column))
     ]
-  pretty DILexicalBlockFile {..} = ppDINode "DILexicalBlockFile"
-    [ ("scope", Just (pretty scope)), ("file", fmap pretty file), ("discriminator", Just (pretty discriminator)) ]
+ppDILexicalBlockBase DILexicalBlockFile {..} = do
+  prettyScope <- ppMDRefM scope ppDILocalScope
+  return $ ppDINode "DILexicalBlockFile"
+    [ ("scope", Just prettyScope), ("file", fmap pretty file), ("discriminator", Just (pretty discriminator)) ]
 
 ppSbs :: BS.ShortByteString -> Maybe (Doc ann)
 ppSbs s
   | SBF.null s = Nothing
   | otherwise = Just (dquotes (pretty s))
 
-instance Pretty DISubprogram where
-  pretty Subprogram {..} = ppMaybe (if definition then Just ("distinct " :: [Char]) else Nothing) <>
-   ppDINode "DISubprogram"
-   [ ("name", ppSbs name)
-   , ("linkageName", ppSbs linkageName)
-   , ("scope", fmap pretty scope)
-   , ("file", fmap pretty file)
-   , ("line", Just (pretty line))
-   , ("type", fmap pretty type')
-   , ("isLocal", Just (ppBoolean localToUnit))
-   , ("isDefinition", Just (ppBoolean definition))
-   , ("scopeLine", Just (pretty scopeLine))
-   , ("containingType", fmap pretty containingType)
-   , ("virtuality", ppVirtuality virtuality)
-   , ("virtualIndex", Just (pretty virtualityIndex))
-   , ("thisAdjustment", Just (pretty thisAdjustment))
-   , ("flags", ppDIFlags flags)
-   , ("isOptimized", Just (ppBoolean optimized))
-   , ("unit", fmap pretty unit)
-   , ("templateParams", ppDIArray (map pretty templateParams))
-   , ("declaration", fmap pretty declaration)
-   , ("retainedNodes", ppDIArray (map pretty retainedNodes))
-   , ("thrownTypes", ppDIArray (map pretty thrownTypes))
-   ]
+ppDISubprogram :: MonadModuleBuilder m => DISubprogram -> m (Doc ann)
+ppDISubprogram Subprogram {..} = do
+  prettyScope <- case scope of { Just x -> do { p <- ppMDRefM x ppDIScope; return $ Just p }; Nothing -> pure Nothing }
+  prettyCT <- case containingType of { Just x -> do { p <- ppMDRefM x ppDIType; return $ Just p }; Nothing -> pure Nothing }
+  prettyUnit <- case unit of { Just x -> do { p <- ppMDRefM x ppDICompileUnit; return $ Just p }; Nothing -> pure Nothing }
+  prettyTParams <- mapM (flip ppMDRefM ppDITemplateParameter) templateParams
+  prettyDecl <- case declaration of { Just x -> do { p <- ppMDRefM x ppDISubprogram; return $ Just p }; Nothing -> pure Nothing }
+  prettyTTs <- mapM (flip ppMDRefM ppDIType) thrownTypes
+  let header = ppMaybe (if definition then Just ("distinct " :: [Char]) else Nothing)
+  return $ header <>
+           ppDINode "DISubprogram"
+           [ ("name", ppSbs name)
+           , ("linkageName", ppSbs linkageName)
+           , ("scope", prettyScope)
+           , ("file", fmap pretty file)
+           , ("line", Just (pretty line))
+           , ("type", fmap pretty type')
+           , ("isLocal", Just (ppBoolean localToUnit))
+           , ("isDefinition", Just (ppBoolean definition))
+           , ("scopeLine", Just (pretty scopeLine))
+           , ("containingType", prettyCT)
+           , ("virtuality", ppVirtuality virtuality)
+           , ("virtualIndex", Just (pretty virtualityIndex))
+           , ("thisAdjustment", Just (pretty thisAdjustment))
+           , ("flags", ppDIFlags flags)
+           , ("isOptimized", Just (ppBoolean optimized))
+           , ("unit", prettyUnit)
+           , ("templateParams", ppDIArray prettyTParams)
+           , ("declaration", prettyDecl)
+           , ("retainedNodes", ppDIArray (map pretty retainedNodes))
+           , ("thrownTypes", ppDIArray prettyTTs)
+           ]
 
 ppVirtuality :: Virtuality -> Maybe (Doc ann)
 ppVirtuality NoVirtuality = Nothing
@@ -990,36 +1026,42 @@ instance Pretty DIFlag where
       flagName VirtualFlag = "Virtual"
       flagName f = show f
 
-
-ppEither :: (Pretty a, Pretty b) => MDRef (Either a b) -> Doc ann
-ppEither (MDRef r) = pretty r
-ppEither (MDInline e) = either pretty pretty e
-
-instance Pretty DICompositeType where
-  pretty DIArrayType {..} = ppDINode "DICompositeType"
+ppDICompositeType :: MonadModuleBuilder m => DICompositeType -> m (Doc ann)
+ppDICompositeType DIArrayType {..} = do
+  prettyEltTy <- case elementTy of {Just x -> do { x' <- ppMDRefM x ppDIType; return $ Just x' }; Nothing -> pure Nothing }
+  return $ ppDINode "DICompositeType"
     [ ("tag", Just "DW_TAG_array_type")
     , ("elements", ppDIArray (map pretty subscripts))
-    , ("baseType", fmap pretty elementTy)
+    , ("baseType", prettyEltTy)
     , ("size", Just (pretty sizeInBits))
     , ("align", Just (pretty alignInBits))
     , ("flags", ppDIFlags flags)
     ]
-  pretty DIClassType {..} = ppDINode "DICompositeType"
+ppDICompositeType DIClassType {..} = do
+  prettyScope <- case scope of { Just x -> do { p <- ppMDRefM x ppDIScope; return $ Just p }; Nothing -> pure Nothing }
+  prettyBaseTy <- case derivedFrom of {Just x -> do { x' <- ppMDRefM x ppDIType; return $ Just x' }; Nothing -> pure Nothing }
+  prettyElements <- mapM (ppEitherM ppDIDerivedType ppDISubprogram) elements
+  prettyVTHolder <- case vtableHolder of {Just x -> do { x' <- ppMDRefM x ppDIType; return $ Just x' }; Nothing -> pure Nothing }
+  prettyTParams <- mapM ppDITemplateParameter templateParams
+  return $ ppDINode "DICompositeType"
     [ ("tag", Just "DW_TAG_class_type")
-    , ("scope", fmap pretty scope)
+    , ("scope", prettyScope)
     , ("name", ppSbs name)
     , ("file", fmap pretty file)
     , ("line", Just (pretty line))
     , ("flags", ppDIFlags flags)
-    , ("baseType", fmap pretty derivedFrom)
-    , ("elements", ppDIArray (map ppEither elements))
-    , ("vtableHolder", fmap pretty vtableHolder)
-    , ("templateParams", ppDIArray (map pretty templateParams))
+    , ("baseType", prettyBaseTy)
+    , ("elements", ppDIArray prettyElements)
+    , ("vtableHolder", prettyVTHolder)
+    , ("templateParams", ppDIArray prettyTParams)
     , ("identifier", ppSbs identifier)
     , ("size", Just (pretty sizeInBits))
     , ("align", Just (pretty alignInBits))
     ]
-  pretty DIEnumerationType {..} = ppDINode "DICompositeType"
+ppDICompositeType DIEnumerationType {..} = do
+  prettyScope <- case scope of { Just x -> do { p <- ppMDRefM x ppDIScope; return $ Just p }; Nothing -> pure Nothing }
+  prettyBaseTy <- case baseType of {Just x -> do { x' <- ppMDRefM x ppDIType; return $ Just x' }; Nothing -> pure Nothing }
+  return $ ppDINode "DICompositeType"
     [ ("tag", Just "DW_TAG_enumeration_type")
     , ("name", ppSbs name)
     , ("file", fmap pretty file)
@@ -1027,46 +1069,56 @@ instance Pretty DICompositeType where
     , ("size", Just (pretty sizeInBits))
     , ("align", Just (pretty alignInBits))
     , ("elements", Just ("!" <> braces (commas (map pretty values))))
-    , ("scope", fmap pretty scope)
+    , ("scope", prettyScope)
     , ("identifier", ppSbs identifier)
-    , ("baseType", fmap pretty baseType)
+    , ("baseType", prettyBaseTy)
     ]
-  pretty DIStructureType {..} = ppDINode "DICompositeType"
+ppDICompositeType DIStructureType {..} = do
+  prettyScope <- case scope of { Just x -> do { p <- ppMDRefM x ppDIScope; return $ Just p }; Nothing -> pure Nothing }
+  prettyBaseTy <- case derivedFrom of {Just x -> do { x' <- ppMDRefM x ppDIType; return $ Just x' }; Nothing -> pure Nothing }
+  prettyElements <- mapM (ppEitherM ppDIDerivedType ppDISubprogram) elements
+  prettyVTHolder <- case vtableHolder of {Just x -> do { x' <- ppMDRefM x ppDIType; return $ Just x' }; Nothing -> pure Nothing }
+  return $ ppDINode "DICompositeType"
     [ ("tag", Just "DW_TAG_structure_type")
-    , ("scope", fmap pretty scope)
+    , ("scope", prettyScope)
     , ("name", ppSbs name)
     , ("file", fmap pretty file)
     , ("line", Just (pretty line))
     , ("flags", ppDIFlags flags)
-    , ("baseType", fmap pretty derivedFrom)
-    , ("elements", ppDIArray (map ppEither elements))
+    , ("baseType", prettyBaseTy)
+    , ("elements", ppDIArray prettyElements)
     , ("runtimeLang", Just (pretty runtimeLang))
-    , ("vtableHolder", fmap pretty vtableHolder)
+    , ("vtableHolder", prettyVTHolder)
     , ("identifier", ppSbs identifier)
     , ("size", Just (pretty sizeInBits))
     , ("align", Just (pretty alignInBits))
     ]
-  pretty DIUnionType {..} = ppDINode "DICompositeType"
+ppDICompositeType DIUnionType {..} = do
+  prettyElements <- mapM (ppEitherM ppDIDerivedType ppDISubprogram) elements
+  return $ ppDINode "DICompositeType"
     [ ("tag", Just "DW_TAG_union_type")
     , ("name", ppSbs name)
     , ("file", fmap pretty file)
     , ("line", Just (pretty line))
     , ("flags", ppDIFlags flags)
-    , ("elements", ppDIArray (map ppEither elements))
+    , ("elements", ppDIArray prettyElements)
     , ("runtimeLang", Just (pretty runtimeLang))
     , ("identifier", ppSbs identifier)
     , ("size", Just (pretty sizeInBits))
     , ("align", Just (pretty alignInBits))
     ]
 
-instance Pretty DIDerivedType where
-  pretty DerivedType {..} = ppDINode "DIDerivedType"
+ppDIDerivedType :: MonadModuleBuilder m => DIDerivedType -> m (Doc ann)
+ppDIDerivedType DerivedType {..} = do
+  prettyScope <- case scope of { Just x -> do { p <- ppMDRefM x ppDIScope; return $ Just p }; Nothing -> pure Nothing }
+  prettyBaseTy <- case baseType of { Just x -> do { x' <- ppMDRefM x ppDIType; return $ Just x' }; Nothing -> pure $ Just "null" }
+  return $ ppDINode "DIDerivedType"
     [ ("tag", Just (pretty tag))
     , ("name", ppSbs name)
     , ("file", fmap pretty file)
     , ("line", Just (pretty line))
-    , ("scope", fmap pretty scope)
-    , ("baseType", Just (pretty baseType))
+    , ("scope", prettyScope)
+    , ("baseType", prettyBaseTy)
     , ("size", Just (pretty sizeInBits))
     , ("align", Just (pretty alignInBits))
     , ("offset", Just (pretty offsetInBits))
