@@ -1298,7 +1298,7 @@ ppConstant c
   | C.SIToFP {..} <- c = do { prettyOp0 <- ppConstant operand0; return $ "sitofp" <+> prettyOp0 <+> "to" <+> pretty type' }
 
   | C.Struct _ packed elems <- c = do
-      prettyElems <- mapM ppConstant elems
+      prettyElems <- mapM (ppTypedM ppConstant) elems
       let struct = spacedbraces $ commas prettyElems
       if packed
       then return $ angleBrackets struct
@@ -1316,13 +1316,13 @@ ppConstant c
 
   | C.Array {..} <- c,  memberType == (IntegerType 8) = return $ "c" <> (dquotes $ hcat [ppIntAsChar val | C.Int _ val <- memberValues])
   | C.Array {..} <- c = do
-      prettyMembs <- mapM ppConstant memberValues
+      prettyMembs <- mapM (ppTypedM ppConstant) memberValues
       return $ brackets $ commas prettyMembs
 
   | C.GetElementPtr {..} <- c = do
       ta <- typeOf address
       let argTy = getElementType ta
-      prettyAIs <- mapM ppConstant (address:indices)
+      prettyAIs <- mapM (ppTypedM ppConstant) (address:indices)
       let prettyBounds = case inBounds of { True -> "inbounds"; False -> mempty }
       return $ "getelementptr" <+> prettyBounds <+> parens (commas (pretty argTy : prettyAIs))
 
