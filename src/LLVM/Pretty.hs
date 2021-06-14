@@ -235,7 +235,7 @@ ppGlobal g
       pre <- case prefix of
                Nothing  -> pure mempty
                Just con -> do
-                 ppCon <- ppConstant con
+                 ppCon <- ppTypedM ppConstant con
                  return $ "prefix" <+> ppCon
       let align = if alignment == 0 then mempty
                   else "align" <+> pretty alignment
@@ -587,7 +587,7 @@ ppInstruction i
       prettyMeta <- ppInstrMeta metadata
       return $ "phi" <+> pretty type' <+> commas prettyInc <+> prettyMeta
 
-  | ICmp {..}   <- i = do { prettyMeta <- ppInstrMeta metadata; prettyOp0 <- ppTypedM ppOperand operand0; prettyOp1 <- ppTypedM ppOperand operand1; return $ "icmp" <+> pretty iPredicate <+> prettyOp0 `cma` prettyOp1 <+> prettyMeta }
+  | ICmp {..}   <- i = do { prettyMeta <- ppInstrMeta metadata; prettyOp0 <- ppTypedM ppOperand operand0; prettyOp1 <- ppOperand operand1; return $ "icmp" <+> pretty iPredicate <+> prettyOp0 `cma` prettyOp1 <+> prettyMeta }
 
   | Call {..} <- i = do
       prettyCall <- ppCall i
@@ -696,7 +696,7 @@ ppInstruction i
     ppInstrWithNuwNsw :: MonadModuleBuilder m => Doc ann -> Bool -> Bool -> Operand -> Operand -> InstructionMetadata -> m (Doc ann)
     ppInstrWithNuwNsw name nuw nsw op0 op1 metadata = do
       prettyOp0 <- ppTypedM ppOperand op0
-      prettyOp1 <- ppTypedM ppOperand op1
+      prettyOp1 <- ppOperand op1
       prettyMeta <- ppInstrMeta metadata
       return $ name
                <+> ppBool "nuw" nuw
@@ -708,7 +708,7 @@ ppInstruction i
     ppInstrWithExact :: MonadModuleBuilder m => Doc ann -> Bool -> Operand -> Operand -> InstructionMetadata -> m (Doc ann)
     ppInstrWithExact name exact op0 op1 metadata = do
       prettyOp0 <- ppTypedM ppOperand op0
-      prettyOp1 <- ppTypedM ppOperand op1
+      prettyOp1 <- ppOperand op1
       prettyMeta <- ppInstrMeta metadata
       return $ name
                <+> ppBool "exact" exact
@@ -1255,7 +1255,7 @@ ppConstant c
 
   | C.GlobalReference ty nm <- c = return $ "@" <> pretty nm
   | C.Vector args <- c = do
-      prettyArgs <- mapM ppConstant args
+      prettyArgs <- mapM (ppTypedM ppConstant) args
       return $ "<" <+> commas prettyArgs <+> ">"
 
   | C.Add {..}  <- c = do { prettyOp0 <- ppConstant operand0; prettyOp1 <- ppConstant operand1; return $ "add"  <+> prettyOp0 `cma` prettyOp1 }
@@ -1326,10 +1326,10 @@ ppConstant c
       let prettyBounds = case inBounds of { True -> "inbounds"; False -> mempty }
       return $ "getelementptr" <+> prettyBounds <+> parens (commas (pretty argTy : prettyAIs))
 
-  | C.BitCast {..}        <- c = do { prettyOp0 <- ppConstant operand0; return $ "bitcast" <+> parens (prettyOp0 <+> "to" <+> pretty type') }
-  | C.PtrToInt {..}       <- c = do { prettyOp0 <- ppConstant operand0; return $ "ptrtoint" <+> parens (prettyOp0 <+> "to" <+> pretty type') }
-  | C.IntToPtr {..}       <- c = do { prettyOp0 <- ppConstant operand0; return $ "inttoptr" <+> parens (prettyOp0 <+> "to" <+> pretty type') }
-  | C.AddrSpaceCast {..}  <- c = do { prettyOp0 <- ppConstant operand0; return $ "addrspacecast" <+> parens (prettyOp0 <+> "to" <+> pretty type') }
+  | C.BitCast {..}        <- c = do { prettyOp0 <- ppTypedM ppConstant operand0; return $ "bitcast" <+> parens (prettyOp0 <+> "to" <+> pretty type') }
+  | C.PtrToInt {..}       <- c = do { prettyOp0 <- ppTypedM ppConstant operand0; return $ "ptrtoint" <+> parens (prettyOp0 <+> "to" <+> pretty type') }
+  | C.IntToPtr {..}       <- c = do { prettyOp0 <- ppTypedM ppConstant operand0; return $ "inttoptr" <+> parens (prettyOp0 <+> "to" <+> pretty type') }
+  | C.AddrSpaceCast {..}  <- c = do { prettyOp0 <- ppTypedM ppConstant operand0; return $ "addrspacecast" <+> parens (prettyOp0 <+> "to" <+> pretty type') }
   | otherwise = error "Non-function argument. (Malformed AST)"
 
 instance Pretty a => Pretty (Named a) where
