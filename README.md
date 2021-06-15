@@ -8,10 +8,11 @@ A pretty printer for ``llvm-hs-pure``. The goal of this project is to be able
 to pretty print a sufficiently large subset of the LLVM AST from pure Haskell
 without having to go through the C++ API.
 
-> **Note**: It is possible to construct llvm-hs-pure ASTs that are invalid ASTs
-> and as such there is no meaningful way to print them. Always run the LLVM
-> verifier on your AST to test it is sound. If you encounter incomplete pattern
-> matches using this library you likely have constructed invalid IR.
+> **Note**: It is possible to construct well-typed Haskell ASTs that are
+> nevertheless considered invalid by LLVM, and as such there is no meaningful way
+> to print them. Always run the LLVM verifier on your AST to test it is sound. If
+> you encounter incomplete pattern matches using this library you likely have
+> constructed invalid IR.
 
 Usage
 -----
