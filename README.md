@@ -48,11 +48,6 @@ of any of these primitives to a `Text`.
 Tests
 -----
 
-```bash
-# This is only necessary for running the test suite
-sudo apt-get install llvm-9-dev
-```
-
 The test suite currently consists of round tripping LLVM IR from correct IR
 outputted by the LLVM toolchain, parsing into llvm-hs AST and then printing it
 back out and comparing it with the original textual form to see if the pretty
