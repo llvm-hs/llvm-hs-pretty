@@ -1,16 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Example where
+module Main where
 
 -- Pretty Printer
-import LLVM.Pretty (ppllvm, ppll)
+import LLVM.Pretty
 
 -- AST
 import LLVM.AST
 import qualified LLVM.AST as AST
 import LLVM.AST.Global
 
+-- Builders
+import LLVM.IRBuilder.Module
+import LLVM.IRBuilder.Monad hiding (block)
+
 import Data.Text.Lazy.IO as TIO
+import Control.Monad
 
 int :: Type
 int = IntegerType 32
@@ -46,11 +51,18 @@ astModule = defaultModule
 
 main :: IO ()
 main = do
+  let (prettyModule, prettyDef, prettyBlock) = fst $ runModuleBuilder emptyModuleBuilder $ do
+                                                 mapM_ emitDefn $ moduleDefinitions astModule
+                                                 prettyModule <- ppllvm astModule
+                                                 prettyDef <- liftM renderll $ ppDefinition defAdd
+                                                 prettyBlock <- liftM renderll $ ppBasicBlock block
+                                                 return (prettyModule, prettyDef, prettyBlock)
+
   TIO.putStrLn "=== Module ==="
-  TIO.putStrLn (ppllvm astModule)
+  TIO.putStrLn prettyModule
 
   TIO.putStrLn "=== Definition ==="
-  TIO.putStrLn (ppll defAdd)
+  TIO.putStrLn prettyDef
 
   TIO.putStrLn "=== Basic Block ==="
-  TIO.putStrLn (ppll block)
+  TIO.putStrLn prettyBlock

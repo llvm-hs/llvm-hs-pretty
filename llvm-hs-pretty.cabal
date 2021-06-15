@@ -10,7 +10,7 @@ build-type:          Simple
 category:            Compilers
 cabal-version:       >=1.10
 homepage:            https://github.com/llvm-hs/llvm-hs-pretty
-extra-source-files:  README.md ChangeLog.md tests/input/*.ll
+extra-source-files:  Example.hs README.md ChangeLog.md tests/input/*.ll
 
 Source-Repository head
     Type: git
@@ -30,6 +30,13 @@ library
     text                 >= 1.2   && < 2.0,
     prettyprinter        >= 1.2,
     llvm-hs-pure         >= 9.0.1.1 && < 10.0
+
+executable Example
+  main-is: Example.hs
+  build-depends:
+    base, text, llvm-hs-pretty,
+    llvm-hs              >= 9.0.1.1  && < 10.0,
+    llvm-hs-pure         >= 9.0.1.1  && < 10.0
 
 Test-suite test
   type:                exitcode-stdio-1.0

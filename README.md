@@ -4,9 +4,9 @@ llvm-hs-pretty
 [![Build Status](https://travis-ci.org/llvm-hs/llvm-hs-pretty.svg)](https://travis-ci.org/llvm-hs/llvm-hs-pretty)
 [![Hackage](https://img.shields.io/hackage/v/llvm-hs-pretty.svg)](https://hackage.haskell.org/package/llvm-hs-pretty)
 
-A pretty printer for ``llvm-hs-pure``. Goal is to be able to pretty print a
-sufficiently large subset of the LLVM AST from pure Haskell without having to go
-through the C++ API.
+A pretty printer for ``llvm-hs-pure``. The goal of this project is to be able
+to pretty print a sufficiently large subset of the LLVM AST from pure Haskell
+without having to go through the C++ API.
 
 > **Note**: It is possible to construct llvm-hs-pure ASTs that are invalid ASTs
 > and as such there is no meaningful way to print them. Always run the LLVM
@@ -16,18 +16,33 @@ through the C++ API.
 Usage
 -----
 
-There is a single function ``ppllvm`` that maps a LLVM.AST.Module to a Text.
+There is a single function ``ppllvm`` that maps a `LLVM.AST.Module` to a `Text`.
 
 ```haskell
 import LLVM.AST
 import LLVM.Pretty (ppllvm)
 
-ppllvm :: Module -> Text
+ppllvm :: MonadModuleBuilder m => Module -> m Text
 ```
 
-Individual LLVM elements (constants, instructions) can be printed using the
-the polymorphic ``ppll`` function for any LLVM structure that implements the
-``PP`` typeclass.
+Individual LLVM IR elements can be printed using the the polymorphic ``ppll``
+function for any LLVM entity that implements the ``Pretty`` typeclass.
+
+Note that many LLVM entities are printed with types inline. For example, an add
+instruction operating on 32-bit integers `a` and `b` is printed as `add i32 %a,
+%b`. Since LLVM named type definitions can only be resolved by querying the
+module state to find the referent type, pretty-printing an entity with a
+displayed type involves a stateful type-lookup operation to compute what that
+type should be. These entities cannot have a stateless `Pretty` instance, but
+instead have dedicated stateful pretty printing primitives. For example, to
+pretty print an instruction, you can use `ppInstruction`:
+
+```
+ppInstruction :: MonadModuleBuilder m => Instruction -> m (Doc ann)
+```
+
+The function `renderll :: Doc ann -> Text` is provided for rendering the output
+of any of these primitives to a `Text`.
 
 Tests
 -----
@@ -37,8 +52,8 @@ Tests
 sudo apt-get install llvm-9-dev
 ```
 
-The test suite currently consists of round tripping a LLVM IR from correct IR
-outputted by the llc toolchain, parsing into llvm-hs AST and then printing it
+The test suite currently consists of round tripping LLVM IR from correct IR
+outputted by the LLVM toolchain, parsing into llvm-hs AST and then printing it
 back out and comparing it with the original textual form to see if the pretty
 printer faithfully preserves the structure. The sample modules are in
 ``tests/``.
@@ -70,82 +85,7 @@ Example
 To try out the standalone example run:
 
 ```bash
-$ stack repl
-$ :load Example.hs
-main
-```
-
-Consider the basic example LLVM module.
-
-```llvm
-; ModuleID = 'example-llvm-module'
-
-define i8 @f(i8 %x){
-entry:
-  ret i8 %x
-}
-```
-
-Using the LLVM.AST we construct the type and feed it to the pretty
-printer.
-
-```haskell
-module Standalone where
-
--- Pretty Printer
-import LLVM.Pretty (ppllvm)
-
--- AST
-import qualified LLVM.AST as AST
-import qualified LLVM.AST.Linkage as Linkage
-import qualified LLVM.AST.Visibility as Visibility
-import qualified LLVM.AST.CallingConvention as Convention
-
-import Data.Text.Lazy.IO as TIO
-
-astModule :: AST.Module
-astModule = AST.Module
-    { AST.moduleName         = "example-llvm-module"
-    , AST.moduleDataLayout   = Nothing
-    , AST.moduleTargetTriple = Nothing
-    , AST.moduleDefinitions  =
-        [ AST.GlobalDefinition
-            (AST.Function
-                Linkage.External
-                Visibility.Default
-                Nothing
-                Convention.C
-                []
-                (AST.IntegerType 8)
-                (AST.Name "f")
-                ([AST.Parameter (AST.IntegerType 8) (AST.Name "x") []], False)
-                []
-                Nothing
-                Nothing
-                0
-                Nothing
-                Nothing
-                [ AST.BasicBlock
-                    (AST.Name "entry")
-                    []
-                    (AST.Do
-                        (AST.Ret
-                            (Just
-                                (AST.LocalReference
-                                    (AST.IntegerType 8)
-                                    (AST.Name "x")
-                                )
-                            )
-                            []
-                        )
-                    )
-                ]
-            )
-        ]
-    }
-
-main :: IO ()
-main = TIO.putStrLn (ppllvm astModule)
+$ stack exec -- Example
 ```
 
 License

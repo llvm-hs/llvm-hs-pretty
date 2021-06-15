@@ -1,5 +1,13 @@
 # Revision history for llvm-hs-pretty
 
+## 9.0.1.1
+
+* Update version to match llvm-hs versioning scheme
+* Update Example.hs and add it to the cabal file so it builds
+* Update printing to work with llvm-hs-9.0.1.1
+* Review tests and update test harness
+* Update README.md
+
 ## 0.9
 
 * Update for llvm-hs 9.0.
