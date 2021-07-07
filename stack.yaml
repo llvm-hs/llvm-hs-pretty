@@ -1,16 +1,18 @@
-#resolver: lts-17.12
-resolver: snapshot.yaml
+resolver: nightly-2021-07-04 # GHC 9.0.1
 
 packages:
 - '.'
 
-#extra-deps:
-#- llvm-hs-12.0.0
-#- llvm-hs-pure-12.0.0
+extra-deps:
+- archive: https://github.com/llvm-hs/llvm-hs/archive/refs/heads/llvm-12.zip
+  subdirs:
+  - llvm-hs
+  - llvm-hs-pure
 
 flags:
   llvm-hs:
     shared-llvm: true
+    llvm-with-rtti: false
 
 ghc-options:
   llvm-hs: -optcxx=-std=c++14 -optcxx=-lstdc++ -optcxx=-fno-rtti

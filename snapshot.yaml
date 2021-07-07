@@ -1,7 +1,0 @@
-resolver: lts-17.12
-
-packages:
-- url: https://github.com/llvm-hs/llvm-hs/archive/refs/heads/llvm-12.zip
-  subdirs:
-  - llvm-hs
-  - llvm-hs-pure
