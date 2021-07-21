@@ -24,12 +24,8 @@ library
     -fwarn-incomplete-patterns
   default-language:    Haskell2010
   build-depends:
-    array                >= 0.5   && < 0.6,
-    base                 >= 4.6   && < 5.0,
-    bytestring           >= 0.1   && < 0.11,
-    llvm-hs-pure         >= 12    && < 13,
-    text                 >= 1.2   && < 2.0,
-    prettyprinter        >= 1.6
+    array, base, bytestring, prettyprinter, text,
+    llvm-hs-pure >= 12 && < 13
 
 Test-suite test
   type:                exitcode-stdio-1.0
@@ -37,16 +33,8 @@ Test-suite test
   main-is:             Main.hs
   default-language:    Haskell2010
   build-depends:
-    llvm-hs-pretty,
-    base                 >= 4.6  && < 5.0,
-    text                 >= 0.1  && < 1.3,
-    mtl                  >= 2.2  && < 3.0,
-    transformers         >= 0.3  && < 0.6,
-    directory            >= 1.2  && < 2.0,
-    filepath             >= 1.3  && < 2.0,
-    tasty                >= 0.11 && < 2.0,
-    tasty-hspec          >= 1.1  && < 2.0,
-    tasty-hunit          >= 0.1  && < 1.0,
-    tasty-golden         >= 1.1  && < 3.0,
+    base, directory, filepath, mtl, tasty, tasty-golden, tasty-hspec,
+    tasty-hunit, text, transformers,
     llvm-hs              >= 12   && < 13,
-    llvm-hs-pure         >= 12   && < 13
+    llvm-hs-pure         >= 12   && < 13,
+    llvm-hs-pretty       >= 12   && < 13
