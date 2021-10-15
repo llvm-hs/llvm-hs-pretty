@@ -17,7 +17,7 @@ module LLVM.Pretty (
 import Prelude hiding ((<$>))
 import GHC.Word
 
-import LLVM.AST.Typed
+import LLVM.Pretty.Typed
 
 import LLVM.AST
 import LLVM.AST.Global
