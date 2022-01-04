@@ -475,7 +475,7 @@ instance Pretty Terminator where
      brackets (hsep [ label (pretty l) | l <- dests ])
      <+> ppInstrMeta meta
 
-    e @ Invoke {..} ->
+    e@Invoke {..} ->
      ppInvoke e
      <+> "to" <+> label (pretty returnDest)
      <+> "unwind" <+> label (pretty exceptionDest)
