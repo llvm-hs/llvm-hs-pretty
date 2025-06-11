@@ -2,12 +2,12 @@ let
   default_nixpkgs = (import <nixpkgs> {}).fetchFromGitHub {
     owner = "NixOS";
     repo = "nixpkgs";
-    rev = "68cc97d306d3187c142cfb2378852f28d47bc098";
-    sha256 = "07zxbk4g4d51hf7dhsj6h7jy5c2iccm2lwaashj36inkhh9lrqa3";
+    rev = "a7ecde854aee5c4c7cd6177f54a99d2c1ff28a31"; # 21.11
+    sha256 = "162dywda2dvfj1248afxc45kcrg83appjd0nmdb541hl7rnncf02";
   };
 in
 
-{ nixpkgs ? default_nixpkgs }:
+{ nixpkgs ? default_nixpkgs, llvm_hs_deps_from_source ? false }:
 
 let
 
@@ -16,8 +16,8 @@ let
   llvm-hs-repo = orig_pkgs.fetchFromGitHub {
     owner = "llvm-hs";
     repo = "llvm-hs";
-    rev = "76cd4d5107862401a7ebbe1bb9cc1cf172fa1d66";
-    sha256 = "0bnh0yyjflhvc8vjrqsa25k7issnvkvgx149bnq7avka5mx2m99m";
+    rev = "442bc488c39f0264930c95e2c98b5cf055d53e8e";
+    sha256 = "1xdxy9gcgs8y32hvvmx2bl9i3h6z967v77g4yp3blqwc2kmbrpg8";
   };
 
   hsOverlay = self: super: {
@@ -25,14 +25,14 @@ let
       overrides = self': super': {
         llvm-hs-pure = super'.callPackage (import "${llvm-hs-repo}/llvm-hs-pure") {};
         llvm-hs = super'.callPackage (import "${llvm-hs-repo}/llvm-hs") {
-          llvm-config = self.llvm_4;
+          llvm-config = self.llvm_9;
         };
         llvm-hs-pretty = super'.callPackage ./. {};
       };
     };
   };
 
-  pkgs = import orig_pkgs.path { overlays = [ hsOverlay ]; };
+  pkgs = import orig_pkgs.path { overlays = if llvm_hs_deps_from_source then [ hsOverlay ] else []; };
 
   env =
     let
@@ -44,6 +44,8 @@ let
       allDependencies =
         let inherit (pkgs.haskellPackages) llvm-hs-pretty; in
         builtins.concatLists [
+          llvm-hs-pretty.buildInputs
+          llvm-hs-pretty.propagatedBuildInputs
           llvm-hs-pretty.nativeBuildInputs
           llvm-hs-pretty.propagatedNativeBuildInputs
         ]
